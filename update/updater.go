@@ -129,8 +129,8 @@ func (u *Updater) ApplyUpdate(release *Release) error {
 	}
 	tmpPath := tmpFile.Name()
 	defer func() {
-		tmpFile.Close()          //nolint:errcheck
-		os.Remove(tmpPath)       //nolint:errcheck
+		tmpFile.Close()    //nolint:errcheck
+		os.Remove(tmpPath) //nolint:errcheck
 	}()
 
 	resp, err := u.httpClient.Get(release.URL) //nolint:noctx

@@ -1,4 +1,5 @@
-// Package task defines the task model and persistence for agent work items.
+// Package task defines the task model for agent work items.
+// Persistence is handled by the workflow engine's pipeline DB steps.
 package task
 
 import "time"
@@ -19,9 +20,9 @@ const (
 type Priority int
 
 const (
-	PriorityLow    Priority = 0
-	PriorityNormal Priority = 1
-	PriorityHigh   Priority = 2
+	PriorityLow      Priority = 0
+	PriorityNormal   Priority = 1
+	PriorityHigh     Priority = 2
 	PriorityCritical Priority = 3
 )
 
@@ -32,9 +33,9 @@ type Task struct {
 	Description string            `json:"description"`
 	Status      Status            `json:"status"`
 	Priority    Priority          `json:"priority"`
-	AssignedTo  string            `json:"assigned_to,omitempty"` // agent ID
+	AssignedTo  string            `json:"assigned_to,omitempty"`
 	TeamID      string            `json:"team_id,omitempty"`
-	ParentID    string            `json:"parent_id,omitempty"` // for sub-tasks
+	ParentID    string            `json:"parent_id,omitempty"`
 	DependsOn   []string          `json:"depends_on,omitempty"`
 	Labels      []string          `json:"labels,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
@@ -44,33 +45,4 @@ type Task struct {
 	UpdatedAt   time.Time         `json:"updated_at"`
 	StartedAt   *time.Time        `json:"started_at,omitempty"`
 	CompletedAt *time.Time        `json:"completed_at,omitempty"`
-}
-
-// Store persists and retrieves tasks.
-type Store interface {
-	// Create persists a new task and returns its assigned ID.
-	Create(t *Task) (string, error)
-
-	// Get retrieves a task by ID.
-	Get(id string) (*Task, error)
-
-	// Update saves changes to an existing task.
-	Update(t *Task) error
-
-	// List returns tasks matching the given filter.
-	List(filter Filter) ([]*Task, error)
-
-	// Delete removes a task by ID.
-	Delete(id string) error
-}
-
-// Filter controls which tasks are returned by List.
-type Filter struct {
-	Status     *Status  `json:"status,omitempty"`
-	AssignedTo string   `json:"assigned_to,omitempty"`
-	TeamID     string   `json:"team_id,omitempty"`
-	ParentID   string   `json:"parent_id,omitempty"`
-	Labels     []string `json:"labels,omitempty"`
-	Limit      int      `json:"limit,omitempty"`
-	Offset     int      `json:"offset,omitempty"`
 }

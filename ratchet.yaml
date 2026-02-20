@@ -1,33 +1,1039 @@
-server:
-  addr: ":9090"
+# Ratchet Workflow Engine Configuration
+#
+# This file drives the entire Ratchet server using the GoCodeAlone/workflow engine.
+# All modules, routes, pipelines, and triggers are declared here — no Go server code needed.
+#
+# Architecture:
+#   React UI -> static.fileserver
+#   REST API -> http.router -> middleware -> pipeline steps -> SQLite
+#   SSE      -> ratchet.sse_hub (GET /events)
+#   Schedule -> agent-tick pipeline (every 30s)
+#
+# Database tables created by ratchet.db_init wiring hook:
+#   agents   — id, name, role, system_prompt, provider, model, status, team_id, is_lead
+#   tasks    — id, title, description, status, priority, assigned_to, team_id, ...
+#   messages — id, type, from_agent, to_agent, content, ...
+#
+# Auth: POST /api/auth/login validates admin/admin credentials and returns a static dev token.
+# For production, replace with auth.jwt + auth.user-store modules.
 
-auth:
-  admin_user: admin
-  admin_pass: admin
-  jwt_secret: ""  # auto-generated if empty
+modules:
+  # --- HTTP server ---
+  - name: ratchet-server
+    type: http.server
+    config:
+      address: ":9090"
+      readTimeout: "15s"
+      writeTimeout: "15s"
 
-data_dir: ./data
-log_level: debug
+  # --- HTTP router ---
+  - name: ratchet-router
+    type: http.router
+    dependsOn: [ratchet-server]
 
-agents:
-  - id: orchestrator
-    name: Orchestrator
-    role: lead
-    system_prompt: "You are the lead orchestrator. Plan work, delegate to team members, ensure forward progress."
-    provider: mock
-    is_lead: true
-    team_id: alpha
+  # --- CORS middleware ---
+  - name: ratchet-cors
+    type: http.middleware.cors
+    config:
+      allowedOrigins: ["*"]
+      allowedMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+    dependsOn: [ratchet-router]
 
-  - id: developer
-    name: Developer
-    role: developer
-    system_prompt: "You are a software developer. Write clean, tested code. Report progress to the orchestrator."
-    provider: mock
-    team_id: alpha
+  # --- Rate limiter ---
+  - name: ratchet-ratelimit
+    type: http.middleware.ratelimit
+    config:
+      requestsPerMinute: 300
+      burstSize: 50
+    dependsOn: [ratchet-cors]
 
-  - id: reviewer
-    name: Reviewer
-    role: qa
-    system_prompt: "You are a QA reviewer. Review code, find bugs, suggest improvements."
-    provider: mock
-    team_id: alpha
+  # --- Auth middleware (JWT Bearer token check) ---
+  - name: ratchet-auth-middleware
+    type: http.middleware.auth
+    config:
+      authType: Bearer
+      secret: "ratchet-dev-secret-change-me"
+      excludePaths:
+        - "/api/auth/login"
+        - "/api/status"
+        - "/events"
+        - "/"
+    dependsOn: [ratchet-ratelimit]
+
+  # --- SQLite database ---
+  - name: ratchet-db
+    type: storage.sqlite
+    config:
+      dbPath: "./data/ratchet.db"
+
+  # --- Messaging broker (in-memory, for future inter-agent messaging) ---
+  - name: ratchet-broker
+    type: messaging.broker
+    config:
+      type: memory
+
+  # --- Scheduler (cron job scheduling for scheduled triggers) ---
+  - name: cronScheduler
+    type: ratchet.scheduler
+    config:
+      cronExpression: "* * * * *"
+
+  # --- CQRS generic query handler (for GET/read pipeline dispatch) ---
+  - name: ratchet-queries
+    type: api.query
+    dependsOn: [ratchet-router]
+
+  # --- CQRS generic command handler (for POST/PUT/PATCH/DELETE pipeline dispatch) ---
+  - name: ratchet-commands
+    type: api.command
+    dependsOn: [ratchet-router]
+
+  # --- AI provider (mock for development; swap provider: anthropic for production) ---
+  - name: ratchet-ai
+    type: ratchet.ai_provider
+    config:
+      provider: mock
+      responses:
+        - "Task acknowledged. Analyzing the problem..."
+        - "I've identified the key issues. Here's my approach..."
+        - "Implementation complete. The solution addresses all requirements."
+        - "Running verification steps to confirm correctness..."
+        - "All checks passed. Reporting back to the team."
+      agents:
+        - id: orchestrator
+          name: Orchestrator
+          role: lead
+          system_prompt: "You are the lead orchestrator agent. Plan work, delegate tasks to team members, and ensure forward progress. Communicate clearly with your team and track task completion."
+          provider: mock
+          model: ""
+          team_id: alpha
+          is_lead: true
+        - id: developer
+          name: Developer
+          role: developer
+          system_prompt: "You are a software developer agent. Write clean, tested, well-documented code. Ask for clarification when requirements are ambiguous. Report progress to the orchestrator."
+          provider: mock
+          model: ""
+          team_id: alpha
+          is_lead: false
+        - id: reviewer
+          name: Reviewer
+          role: reviewer
+          system_prompt: "You are a code reviewer agent. Review code for correctness, performance, security issues, and style. Provide constructive feedback and approve changes when ready."
+          provider: mock
+          model: ""
+          team_id: alpha
+          is_lead: false
+
+  # --- SSE hub (real-time Server-Sent Events for the UI) ---
+  - name: ratchet-sse
+    type: ratchet.sse_hub
+    config:
+      path: "/events"
+    dependsOn: [ratchet-server]
+
+  # --- MCP Client (connects to external MCP servers) ---
+  - name: ratchet-mcp-client
+    type: ratchet.mcp_client
+    config:
+      servers: []
+    dependsOn: [ratchet-db]
+
+  # --- MCP Server (exposes Ratchet APIs as MCP tools) ---
+  - name: ratchet-mcp-server
+    type: ratchet.mcp_server
+    config:
+      path: "/mcp"
+    dependsOn: [ratchet-server, ratchet-db]
+
+  # --- Static file server (serves React UI) ---
+  - name: ratchet-ui
+    type: static.fileserver
+    config:
+      root: "./ui/dist"
+      prefix: "/"
+      spaFallback: true
+      cacheMaxAge: 0
+      router: ratchet-router
+    dependsOn: [ratchet-router]
+
+workflows:
+  http-ratchet:
+    router: ratchet-router
+    server: ratchet-server
+    routes:
+      # ============================================================
+      # PUBLIC ROUTES (no auth required)
+      # ============================================================
+
+      # Server status
+      - method: GET
+        path: "/api/status"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  status: "ok"
+                  version: "1.0.0"
+                  service: "ratchet"
+
+      # Login (MVP: hardcoded admin/admin, returns static dev token)
+      - method: POST
+        path: "/api/auth/login"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: check-credentials
+              type: step.conditional
+              config:
+                # Check that username == "admin" — password check is simplified for MVP
+                field: "steps.parse-request.body.username"
+                routes:
+                  "admin": respond-ok
+                default: unauthorized
+            - name: respond-ok
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  token: "ratchet-dev-token-change-me-in-production"
+                  user:
+                    id: "admin"
+                    username: "admin"
+                    email: "admin@ratchet.dev"
+            - name: unauthorized
+              type: step.json_response
+              config:
+                status: 401
+                body:
+                  error: "invalid credentials"
+
+      # ============================================================
+      # AGENT ROUTES (auth required)
+      # ============================================================
+
+      # List all agents
+      - method: GET
+        path: "/api/agents"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-agents
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, role, system_prompt, provider, model, status, team_id, is_lead, created_at, updated_at FROM agents ORDER BY created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-agents.rows"
+
+      # Get single agent by ID
+      - method: GET
+        path: "/api/agents/{id}"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-agent
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, role, system_prompt, provider, model, status, team_id, is_lead, created_at, updated_at FROM agents WHERE id = ?"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: single
+            - name: check-found
+              type: step.conditional
+              config:
+                field: "steps.get-agent.found"
+                routes:
+                  "false": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-agent.row"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "agent not found"
+
+      # Start an agent (set status = active)
+      - method: POST
+        path: "/api/agents/{id}/start"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: update-status
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE agents SET status = 'active', updated_at = datetime('now') WHERE id = ?"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+            - name: check-affected
+              type: step.conditional
+              config:
+                field: "steps.update-status.affected_rows"
+                routes:
+                  "0": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  status: "active"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "agent not found"
+
+      # Stop an agent (set status = stopped)
+      - method: POST
+        path: "/api/agents/{id}/stop"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: update-status
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE agents SET status = 'stopped', updated_at = datetime('now') WHERE id = ?"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+            - name: check-affected
+              type: step.conditional
+              config:
+                field: "steps.update-status.affected_rows"
+                routes:
+                  "0": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  status: "stopped"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "agent not found"
+
+      # ============================================================
+      # TASK ROUTES (auth required)
+      # ============================================================
+
+      # List all tasks
+      - method: GET
+        path: "/api/tasks"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-tasks
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, title, description, status, priority, assigned_to, team_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks ORDER BY priority DESC, created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-tasks.rows"
+
+      # Create a new task
+      - method: POST
+        path: "/api/tasks"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [title]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+                  now: "{{ now }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO tasks (id, title, description, status, priority, assigned_to, team_id, parent_id, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, '', ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"title\"}}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ default 1 (index .steps \"parse-request\" \"body\" \"priority\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"assigned_to\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"team_id\") }}"
+                  - "{{ .steps.prepare.now }}"
+                  - "{{ .steps.prepare.now }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  title: "{{index .steps \"parse-request\" \"body\" \"title\"}}"
+                  status: "pending"
+                  created_at: "{{ .steps.prepare.now }}"
+
+      # Get single task by ID
+      - method: GET
+        path: "/api/tasks/{id}"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-task
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, title, description, status, priority, assigned_to, team_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks WHERE id = ?"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: single
+            - name: check-found
+              type: step.conditional
+              config:
+                field: "steps.get-task.found"
+                routes:
+                  "false": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-task.row"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "task not found"
+
+      # Update task (PATCH — typically used to update status, assigned_to, result)
+      - method: PATCH
+        path: "/api/tasks/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: update-task
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE tasks SET status = ?, assigned_to = ?, result = ?, updated_at = datetime('now') WHERE id = ?"
+                params:
+                  - "{{index .steps \"parse-request\" \"body\" \"status\"}}"
+                  - "{{index .steps \"parse-request\" \"body\" \"assigned_to\"}}"
+                  - "{{index .steps \"parse-request\" \"body\" \"result\"}}"
+                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+            - name: check-affected
+              type: step.conditional
+              config:
+                field: "steps.update-task.affected_rows"
+                routes:
+                  "0": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  id: "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  status: "{{index .steps \"parse-request\" \"body\" \"status\"}}"
+                  updated: true
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "task not found"
+
+      # Create a new agent
+      - method: POST
+        path: "/api/agents"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [name]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+                  now: "{{ now }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO agents (id, name, role, system_prompt, provider, model, team_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'mock', '', ?, ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"role\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"system_prompt\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"team_id\") }}"
+                  - "{{ .steps.prepare.now }}"
+                  - "{{ .steps.prepare.now }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  status: "idle"
+
+      # Delete an agent
+      - method: DELETE
+        path: "/api/agents/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete-agent
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM agents WHERE id = ?"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  deleted: true
+
+      # Update an agent
+      - method: PATCH
+        path: "/api/agents/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: update-agent
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE agents SET name = COALESCE(NULLIF(?, ''), name), role = COALESCE(NULLIF(?, ''), role), system_prompt = COALESCE(NULLIF(?, ''), system_prompt), team_id = COALESCE(NULLIF(?, ''), team_id), updated_at = datetime('now') WHERE id = ?"
+                params:
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"name\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"role\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"system_prompt\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"team_id\") }}"
+                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  updated: true
+
+      # ============================================================
+      # TRANSCRIPT ROUTES (auth required)
+      # ============================================================
+
+      # List all transcripts
+      - method: GET
+        path: "/api/transcripts"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-transcripts
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts ORDER BY created_at DESC LIMIT 200"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-transcripts.rows"
+
+      # Get transcripts for an agent
+      - method: GET
+        path: "/api/agents/{id}/transcripts"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-transcripts
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE agent_id = ? ORDER BY created_at ASC"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-transcripts.rows"
+
+      # ============================================================
+      # PROJECT ROUTES (auth required)
+      # ============================================================
+
+      # List all projects
+      - method: GET
+        path: "/api/projects"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-projects
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, description, workspace_path, status, created_at, updated_at FROM projects ORDER BY created_at DESC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-projects.rows"
+
+      # Create a new project
+      - method: POST
+        path: "/api/projects"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [name]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+                  now: "{{ now }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO projects (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ .steps.prepare.now }}"
+                  - "{{ .steps.prepare.now }}"
+            - name: init-workspace
+              type: step.workspace_init
+              config:
+                data_dir: "./data"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  status: "active"
+
+      # Get single project
+      - method: GET
+        path: "/api/projects/{id}"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-project
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, description, workspace_path, status, created_at, updated_at FROM projects WHERE id = ?"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: single
+            - name: check-found
+              type: step.conditional
+              config:
+                field: "steps.get-project.found"
+                routes:
+                  "false": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-project.row"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "project not found"
+
+      # Update project
+      - method: PATCH
+        path: "/api/projects/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: update-project
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE projects SET name = COALESCE(NULLIF(?, ''), name), description = COALESCE(NULLIF(?, ''), description), status = COALESCE(NULLIF(?, ''), status), updated_at = datetime('now') WHERE id = ?"
+                params:
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"name\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"status\") }}"
+                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  updated: true
+
+      # Get tasks for project
+      - method: GET
+        path: "/api/projects/{id}/tasks"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-tasks
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, title, description, status, priority, assigned_to, project_id, created_at, updated_at FROM tasks WHERE project_id = ? ORDER BY priority DESC, created_at ASC"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-tasks.rows"
+
+      # Get transcripts for project
+      - method: GET
+        path: "/api/projects/{id}/transcripts"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-transcripts
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE project_id = ? ORDER BY created_at ASC"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-transcripts.rows"
+
+      # ============================================================
+      # TEAM ROUTES (auth required)
+      # ============================================================
+
+      # List teams (derived from agents with a team_id)
+      - method: GET
+        path: "/api/teams"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-teams
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT DISTINCT team_id as id, team_id as name FROM agents WHERE team_id != '' ORDER BY team_id ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-teams.rows"
+
+      # ============================================================
+      # MESSAGE ROUTES (auth required)
+      # ============================================================
+
+      # List messages (most recent first, limit 100)
+      - method: GET
+        path: "/api/messages"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-messages
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, type, from_agent, to_agent, team_id, subject, content, reply_to, metadata, created_at FROM messages ORDER BY created_at DESC LIMIT 100"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-messages.rows"
+
+      # ============================================================
+      # SERVER INFO ROUTE (auth required — used by Settings page)
+      # ============================================================
+
+      - method: GET
+        path: "/api/info"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: count-agents
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT COUNT(*) as count FROM agents"
+                mode: single
+            - name: count-teams
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT COUNT(DISTINCT team_id) as count FROM agents WHERE team_id != ''"
+                mode: single
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  version: "1.0.0"
+                  uptime: "running"
+                  agent_count: "{{index .steps \"count-agents\" \"row\" \"count\"}}"
+                  team_count: "{{index .steps \"count-teams\" \"row\" \"count\"}}"
+                  plugins:
+                    - "ratchet.ai_provider"
+                    - "ratchet.sse_hub"
+                    - "ratchet.scheduler"
+                    - "ratchet.mcp_client"
+                    - "ratchet.mcp_server"
+                    - "ratchet.db_init"
+                    - "step.agent_execute"
+                    - "step.workspace_init"
+
+      # ============================================================
+      # VERSION ROUTE (auth required)
+      # ============================================================
+
+      - method: GET
+        path: "/api/version"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  version: "1.0.0"
+
+      # ============================================================
+      # AUTH ME ROUTE (auth required — returns current user info)
+      # ============================================================
+
+      - method: GET
+        path: "/api/auth/me"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  id: "admin"
+                  username: "admin"
+                  role: "admin"
+
+# ============================================================
+# PIPELINES (standalone, not inline — used by triggers)
+# ============================================================
+pipelines:
+  # Agent tick: runs every 30 seconds to process pending tasks for active agents
+  agent-tick:
+    steps:
+      - name: find-active-agents
+        type: step.db_query
+        config:
+          database: ratchet-db
+          query: "SELECT id, name, role, system_prompt, provider, team_id FROM agents WHERE status = 'active'"
+          mode: list
+
+      - name: check-active-agents
+        type: step.conditional
+        config:
+          field: "steps.find-active-agents.count"
+          routes:
+            "0": done
+          default: find-pending-task
+
+      - name: find-pending-task
+        type: step.db_query
+        config:
+          database: ratchet-db
+          query: "SELECT t.id, t.title, t.description, t.priority, a.id as agent_id, a.name as agent_name, a.system_prompt, a.provider FROM tasks t JOIN agents a ON t.assigned_to = a.id WHERE t.status = 'pending' AND a.status = 'active' ORDER BY t.priority DESC, t.created_at ASC LIMIT 1"
+          mode: single
+
+      - name: check-pending-task
+        type: step.conditional
+        config:
+          field: "steps.find-pending-task.found"
+          routes:
+            "false": done
+          default: mark-in-progress
+
+      - name: mark-in-progress
+        type: step.db_exec
+        config:
+          database: ratchet-db
+          query: "UPDATE tasks SET status = 'in_progress', started_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+          params: ["{{ .steps.find-pending-task.row.id }}"]
+
+      - name: execute-agent
+        type: step.agent_execute
+        config:
+          max_iterations: 3
+          provider_service: ratchet-ai
+
+      - name: mark-completed
+        type: step.db_exec
+        config:
+          database: ratchet-db
+          query: "UPDATE tasks SET status = 'completed', result = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+          params:
+            - "{{ .steps.execute-agent.result }}"
+            - "{{ .steps.find-pending-task.row.id }}"
+
+      - name: log-completion
+        type: step.log
+        config:
+          message: "Agent tick complete: task {{ .steps.find-pending-task.row.id }} processed"
+          level: info
+
+      - name: done
+        type: step.log
+        config:
+          message: "Agent tick: no active agents or pending tasks"
+          level: debug
+
+# ============================================================
+# TRIGGERS
+# ============================================================
+triggers:
+  schedule:
+    jobs:
+      - cron: "* * * * *"
+        workflow: "pipeline:agent-tick"
+        action: "tick"

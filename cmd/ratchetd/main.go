@@ -1,107 +1,118 @@
 // Command ratchetd is the Ratchet server daemon.
+// It bootstraps a GoCodeAlone/workflow engine with the ratchet plugin and
+// runs the server entirely from the YAML config file.
 package main
 
 import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"github.com/GoCodeAlone/ratchet/config"
+	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/ratchet/internal/version"
-	"github.com/GoCodeAlone/ratchet/server"
-	"github.com/GoCodeAlone/ratchet/server/api"
+	"github.com/GoCodeAlone/ratchet/ratchetplugin"
+	"github.com/GoCodeAlone/workflow"
+	"github.com/GoCodeAlone/workflow/config"
+	"github.com/GoCodeAlone/workflow/handlers"
+	"github.com/GoCodeAlone/workflow/plugin"
+	pluginapi "github.com/GoCodeAlone/workflow/plugins/api"
+	pluginauth "github.com/GoCodeAlone/workflow/plugins/auth"
+	pluginhttp "github.com/GoCodeAlone/workflow/plugins/http"
+	pluginmessaging "github.com/GoCodeAlone/workflow/plugins/messaging"
+	pluginobs "github.com/GoCodeAlone/workflow/plugins/observability"
+	pluginpipeline "github.com/GoCodeAlone/workflow/plugins/pipelinesteps"
+	pluginscheduler "github.com/GoCodeAlone/workflow/plugins/scheduler"
+	pluginstorage "github.com/GoCodeAlone/workflow/plugins/storage"
+	_ "modernc.org/sqlite"
+)
+
+var (
+	configPath = flag.String("config", "ratchet.yaml", "path to workflow config file")
 )
 
 func main() {
-	var (
-		configPath = flag.String("config", "ratchet.yaml", "path to config file")
-		addr       = flag.String("addr", "", "listen address (overrides config)")
-		dataDir    = flag.String("data-dir", "", "data directory (overrides config)")
-	)
 	flag.Parse()
 
-	// Load configuration
-	cfg, err := config.Load(*configPath)
-	if err != nil {
-		// Fall back to defaults if config file not found
-		if os.IsNotExist(err) {
-			cfg = config.DefaultConfig()
-		} else {
-			fmt.Fprintf(os.Stderr, "error loading config: %v\n", err)
-			os.Exit(1)
-		}
-	}
-
-	// Apply flag overrides
-	if *addr != "" {
-		cfg.Server.Addr = *addr
-	}
-	if *dataDir != "" {
-		cfg.DataDir = *dataDir
-	}
-
-	// Set up logger
-	logLevel := slog.LevelInfo
-	switch cfg.LogLevel {
-	case "debug":
-		logLevel = slog.LevelDebug
-	case "warn":
-		logLevel = slog.LevelWarn
-	case "error":
-		logLevel = slog.LevelError
-	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: logLevel,
+		Level: slog.LevelDebug,
 	}))
 
-	// Ensure data directory exists
-	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
-		logger.Error("create data dir", slog.String("path", cfg.DataDir), slog.Any("err", err))
-		os.Exit(1)
+	logger.Info("starting ratchetd",
+		"version", version.Version,
+		"commit", version.Commit,
+	)
+
+	// Load workflow config
+	cfg, err := config.LoadFromFile(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to load config %s: %v", *configPath, err)
 	}
 
-	// Build the agent manager
-	mgr := api.NewAgentManager(cfg, logger)
+	// Create modular application and workflow engine
+	app := modular.NewStdApplication(nil, logger)
+	engine := workflow.NewStdEngine(app, logger)
 
-	// Create and configure server
-	ver := version.Version
-	srv := server.New(*cfg, ver, logger)
-	srv.SetAgentManager(mgr)
-	srv.SetTaskStore(mgr.TaskStore())
-	srv.SetBus(mgr.Bus())
-
-	// Start server in background
-	errCh := make(chan error, 1)
-	go func() {
-		logger.Info("starting ratchet server",
-			slog.String("version", ver),
-			slog.String("addr", cfg.Server.Addr),
-		)
-		if err := srv.Start(); err != nil {
-			errCh <- err
+	// Load workflow plugins (core primitives)
+	pipelinePlugin := pluginpipeline.New()
+	plugins := []plugin.EnginePlugin{
+		pluginhttp.New(),
+		pluginobs.New(),
+		pluginmessaging.New(),
+		pluginauth.New(),
+		pluginstorage.New(),
+		pluginapi.New(),
+		pipelinePlugin,
+		pluginscheduler.New(),
+	}
+	for _, p := range plugins {
+		if err := engine.LoadPlugin(p); err != nil {
+			log.Fatalf("Failed to load plugin %s: %v", p.Name(), err)
 		}
-	}()
+	}
+
+	// Load the ratchet plugin (custom modules, steps, wiring hooks)
+	if err := engine.LoadPlugin(ratchetplugin.New()); err != nil {
+		log.Fatalf("Failed to load ratchet plugin: %v", err)
+	}
+
+	// Wire the pipeline handler
+	pipelineHandler := pipelinePlugin.PipelineHandler()
+	if pipelineHandler != nil {
+		pipelineHandler.SetStepRegistry(engine.GetStepRegistry())
+		pipelineHandler.SetLogger(logger)
+	}
+
+	// Build engine from config
+	if err := engine.BuildFromConfig(cfg); err != nil {
+		log.Fatalf("Failed to build engine: %v", err)
+	}
+
+	// Start engine
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := engine.Start(ctx); err != nil {
+		log.Fatalf("Failed to start engine: %v", err)
+	}
+
+	fmt.Printf("Ratchet server running on http://localhost:9090\n")
+	fmt.Printf("Version: %s (%s)\n", version.Version, version.Commit)
 
 	// Wait for shutdown signal
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
 
-	select {
-	case err := <-errCh:
-		logger.Error("server error", slog.Any("err", err))
-		os.Exit(1)
-	case sig := <-quit:
-		logger.Info("shutting down", slog.String("signal", sig.String()))
+	fmt.Println("Shutting down...")
+	cancel()
+	if err := engine.Stop(context.Background()); err != nil {
+		logger.Error("engine stop error", "error", err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*1e9) // 10s
-	defer cancel()
-	if err := srv.Stop(ctx); err != nil {
-		logger.Error("shutdown error", slog.Any("err", err))
-	}
-	logger.Info("server stopped")
+	fmt.Println("Shutdown complete")
 }
+
+// Ensure handlers package is used (PipelineWorkflowHandler type).
+var _ *handlers.PipelineWorkflowHandler

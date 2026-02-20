@@ -66,7 +66,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     fetchTasks();
   }, [fetchAgents, fetchTasks]);
 
-  const activeAgents = agents.filter((a) => a.status === 'working').length;
+  const activeAgents = agents.filter((a) => a.status === 'working' || a.status === 'active').length;
   const pendingTasks = tasks.filter((t) => t.status === 'pending').length;
   const completedTasks = tasks.filter((t) => t.status === 'completed').length;
   const failedTasks = tasks.filter((t) => t.status === 'failed').length;
@@ -120,7 +120,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   <StatusDot status={agent.status} />
                   <span style={{ fontSize: '14px', color: colors.text }}>{agent.name}</span>
-                  {agent.is_lead && (
+                  {!!agent.is_lead && (
                     <span
                       style={{
                         marginLeft: '8px',

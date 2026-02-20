@@ -111,7 +111,7 @@ export default function Settings() {
       </div>
 
       {/* Connection */}
-      <div style={{ ...baseStyles.card }}>
+      <div style={{ ...baseStyles.card, marginBottom: '16px' }}>
         <SectionTitle>Connection</SectionTitle>
         <InfoRow label="API Base" value="localhost:9090" />
         <InfoRow label="UI Port" value="localhost:5173 (dev)" />
@@ -129,6 +129,25 @@ export default function Settings() {
           API requests are proxied to the Ratchet server. SSE events stream from{' '}
           <code style={{ color: colors.blue }}>/events</code>. Auth token is stored in{' '}
           <code style={{ color: colors.blue }}>localStorage</code>.
+        </div>
+      </div>
+
+      {/* MCP Servers */}
+      <div style={{ ...baseStyles.card }}>
+        <SectionTitle>MCP Servers</SectionTitle>
+        <div
+          style={{
+            padding: '10px 14px',
+            backgroundColor: colors.mantle,
+            borderRadius: '6px',
+            fontSize: '13px',
+            color: colors.subtext0,
+            lineHeight: '1.6',
+          }}
+        >
+          MCP (Model Context Protocol) servers provide additional tools to agents. Configure them
+          via <code style={{ color: colors.blue }}>ratchet.yaml</code> or the{' '}
+          <code style={{ color: colors.blue }}>POST /api/mcp-servers</code> API endpoint.
         </div>
       </div>
     </div>

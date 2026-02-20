@@ -1,0 +1,157 @@
+// Package ratchetplugin is a workflow EnginePlugin that provides
+// ratchet-specific module types, pipeline steps, and wiring hooks.
+package ratchetplugin
+
+import (
+	"context"
+	"database/sql"
+	"os"
+	"strings"
+
+	"github.com/CrisisTextLine/modular"
+	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
+	"github.com/GoCodeAlone/workflow/capability"
+	"github.com/GoCodeAlone/workflow/config"
+	"github.com/GoCodeAlone/workflow/module"
+	"github.com/GoCodeAlone/workflow/plugin"
+	"github.com/GoCodeAlone/workflow/schema"
+	"github.com/GoCodeAlone/workflow/secrets"
+)
+
+// RatchetPlugin implements plugin.EnginePlugin.
+// It registers:
+//   - Module factories: ratchet.ai_provider, ratchet.sse_hub, ratchet.mcp_client, ratchet.mcp_server
+//   - Step factories: step.agent_execute, step.workspace_init
+//   - Wiring hooks: ratchet.db_init, ratchet.auth_token, ratchet.secrets_guard, ratchet.tool_registry
+type RatchetPlugin struct {
+	plugin.BaseEnginePlugin
+}
+
+// New creates a new RatchetPlugin ready to register with the workflow engine.
+func New() *RatchetPlugin {
+	return &RatchetPlugin{
+		BaseEnginePlugin: plugin.BaseEnginePlugin{
+			BaseNativePlugin: plugin.BaseNativePlugin{
+				PluginName:        "ratchet",
+				PluginVersion:     "1.0.0",
+				PluginDescription: "Ratchet autonomous agent orchestration",
+			},
+			Manifest: plugin.PluginManifest{
+				Name:        "ratchet",
+				Version:     "1.0.0",
+				Author:      "GoCodeAlone",
+				Description: "Ratchet autonomous agent orchestration plugin",
+				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init"},
+				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry"},
+			},
+		},
+	}
+}
+
+// Capabilities returns the capability contracts for this plugin.
+func (p *RatchetPlugin) Capabilities() []capability.Contract {
+	return nil
+}
+
+// ModuleFactories returns the module factories registered by this plugin.
+func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
+	return map[string]plugin.ModuleFactory{
+		"ratchet.ai_provider": newAIProviderFactory(),
+		"ratchet.sse_hub":     newSSEHubFactory(),
+		"ratchet.scheduler":   newSchedulerFactory(),
+		"ratchet.mcp_client":  newMCPClientFactory(),
+		"ratchet.mcp_server":  newMCPServerFactory(),
+	}
+}
+
+// StepFactories returns the pipeline step factories registered by this plugin.
+func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
+	return map[string]plugin.StepFactory{
+		"step.agent_execute":  newAgentExecuteStepFactory(),
+		"step.workspace_init": newWorkspaceInitFactory(),
+	}
+}
+
+// WiringHooks returns the post-init wiring hooks for this plugin.
+func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
+	return []plugin.WiringHook{
+		dbInitHook(),
+		authTokenHook(),
+		secretsGuardHook(),
+		toolRegistryHook(),
+	}
+}
+
+// ModuleSchemas returns schema definitions for the UI.
+func (p *RatchetPlugin) ModuleSchemas() []*schema.ModuleSchema {
+	return nil
+}
+
+// secretsGuardHook creates a SecretGuard and registers it in the service registry.
+func secretsGuardHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.secrets_guard",
+		Priority: 85,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			// Create an EnvProvider with RATCHET_ prefix
+			envProvider := secrets.NewEnvProvider("RATCHET_")
+			guard := NewSecretGuard(envProvider)
+
+			// Load all RATCHET_* environment variables as secrets
+			ctx := context.Background()
+			var secretNames []string
+			for _, env := range os.Environ() {
+				if strings.HasPrefix(env, "RATCHET_") {
+					parts := strings.SplitN(env, "=", 2)
+					// Strip prefix for the secret name
+					name := strings.TrimPrefix(parts[0], "RATCHET_")
+					secretNames = append(secretNames, name)
+				}
+			}
+			if len(secretNames) > 0 {
+				_ = guard.LoadSecrets(ctx, secretNames)
+			}
+
+			// Register in service registry
+			app.RegisterService("ratchet-secret-guard", guard)
+			return nil
+		},
+	}
+}
+
+// toolRegistryHook creates a ToolRegistry with built-in tools and registers it.
+func toolRegistryHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.tool_registry",
+		Priority: 80,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			registry := NewToolRegistry()
+
+			// Get DB for task/message tools
+			var db *sql.DB
+			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok {
+					db = dbp.DB()
+				}
+			}
+
+			// Register built-in file and shell tools
+			registry.Register(&tools.FileReadTool{})
+			registry.Register(&tools.FileWriteTool{})
+			registry.Register(&tools.FileListTool{})
+			registry.Register(&tools.ShellExecTool{})
+			registry.Register(&tools.WebFetchTool{})
+
+			if db != nil {
+				registry.Register(&tools.TaskCreateTool{DB: db})
+				registry.Register(&tools.TaskUpdateTool{DB: db})
+				registry.Register(&tools.MessageSendTool{DB: db})
+			}
+
+			// Register in service registry
+			app.RegisterService("ratchet-tool-registry", registry)
+			return nil
+		},
+	}
+}

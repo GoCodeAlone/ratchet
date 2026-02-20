@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { colors, statusColors, baseStyles } from '../theme';
-import { AgentInfo, AgentStatus } from '../types';
+import { AgentInfo, AgentStatus, TranscriptEntry } from '../types';
+import { createAgent, deleteAgent, fetchAgentTranscripts } from '../utils/api';
 
 function StatusBadge({ status }: { status: AgentStatus }) {
   const color = statusColors[status] ?? colors.overlay0;
@@ -33,7 +34,86 @@ function StatusBadge({ status }: { status: AgentStatus }) {
   );
 }
 
+function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (data: { name: string; role?: string; system_prompt?: string; team_id?: string }) => Promise<void> }) {
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('');
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [teamId, setTeamId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setLoading(true);
+    setError('');
+    try {
+      await onSubmit({ name: name.trim(), role: role.trim() || undefined, system_prompt: systemPrompt.trim() || undefined, team_id: teamId.trim() || undefined });
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create agent');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ ...baseStyles.card, width: '480px', padding: '28px' }}>
+        <h3 style={{ margin: '0 0 20px', color: colors.text, fontSize: '16px' }}>New Agent</h3>
+        {error && (
+          <div style={{ color: colors.red, fontSize: '13px', marginBottom: '12px', padding: '8px 12px', backgroundColor: `${colors.red}11`, borderRadius: '6px' }}>
+            {error}
+          </div>
+        )}
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Name *</label>
+            <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Agent name" required autoFocus style={baseStyles.input} />
+          </div>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Role</label>
+            <input type="text" value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. researcher, coder" style={baseStyles.input} />
+          </div>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Team ID</label>
+            <input type="text" value={teamId} onChange={(e) => setTeamId(e.target.value)} placeholder="Optional team assignment" style={baseStyles.input} />
+          </div>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>System Prompt</label>
+            <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="Optional system prompt" rows={3} style={{ ...baseStyles.input, resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={onClose} style={baseStyles.button.secondary}>Cancel</button>
+            <button type="submit" disabled={loading || !name.trim()} style={{ ...baseStyles.button.primary, opacity: loading || !name.trim() ? 0.6 : 1 }}>
+              {loading ? 'Creating...' : 'Create Agent'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () => void }) {
+  const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
+  const [transcriptsLoading, setTranscriptsLoading] = useState(false);
+
+  useEffect(() => {
+    setTranscriptsLoading(true);
+    fetchAgentTranscripts(agent.id)
+      .then((data) => setTranscripts(data ?? []))
+      .catch(() => {})
+      .finally(() => setTranscriptsLoading(false));
+  }, [agent.id]);
+
+  const roleColors: Record<string, string> = {
+    system: colors.mauve,
+    user: colors.blue,
+    assistant: colors.green,
+    tool: colors.peach,
+  };
+
   return (
     <div
       style={{
@@ -46,7 +126,7 @@ function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () =>
         <div>
           <h3 style={{ margin: '0 0 4px', color: colors.text, fontSize: '16px' }}>{agent.name}</h3>
           <p style={{ margin: '0 0 12px', color: colors.overlay1, fontSize: '13px' }}>
-            {agent.personality.role}
+            {agent.role}
           </p>
         </div>
         <button
@@ -67,7 +147,7 @@ function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () =>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
         <div>
           <div style={{ color: colors.subtext0, marginBottom: '3px' }}>Model</div>
-          <div style={{ color: colors.text, fontFamily: 'monospace' }}>{agent.personality.model}</div>
+          <div style={{ color: colors.text, fontFamily: 'monospace' }}>{agent.model}</div>
         </div>
         <div>
           <div style={{ color: colors.subtext0, marginBottom: '3px' }}>Team</div>
@@ -98,6 +178,32 @@ function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () =>
           </div>
         )}
       </div>
+
+      {/* Transcripts section */}
+      <div style={{ marginTop: '16px', borderTop: `1px solid ${colors.surface1}`, paddingTop: '16px' }}>
+        <div style={{ fontSize: '12px', fontWeight: '600', color: colors.subtext0, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
+          Recent Transcripts
+        </div>
+        {transcriptsLoading ? (
+          <div style={{ color: colors.overlay0, fontSize: '13px' }}>Loading...</div>
+        ) : transcripts.length === 0 ? (
+          <div style={{ color: colors.overlay0, fontSize: '13px' }}>No transcripts yet</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '300px', overflowY: 'auto' }}>
+            {transcripts.slice(0, 10).map((entry) => (
+              <div key={entry.id} style={{ padding: '8px 10px', backgroundColor: colors.mantle, borderRadius: '6px', borderLeft: `2px solid ${roleColors[entry.role] ?? colors.overlay0}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: '600', color: roleColors[entry.role] ?? colors.overlay0, textTransform: 'uppercase' }}>{entry.role}</span>
+                  <span style={{ fontSize: '11px', color: colors.overlay0 }}>{new Date(entry.created_at).toLocaleString()}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: colors.subtext1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {entry.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -106,6 +212,7 @@ export default function AgentList() {
   const { agents, loading, error, fetchAgents, startAgent, stopAgent } = useAgentStore();
   const [selected, setSelected] = useState<AgentInfo | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     fetchAgents();
@@ -124,6 +231,23 @@ export default function AgentList() {
     setActionLoading(id + '-stop');
     try {
       await stopAgent(id);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleCreate(data: { name: string; role?: string; system_prompt?: string; team_id?: string }) {
+    await createAgent(data);
+    await fetchAgents();
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this agent?')) return;
+    setActionLoading(id + '-delete');
+    try {
+      await deleteAgent(id);
+      if (selected?.id === id) setSelected(null);
+      await fetchAgents();
     } finally {
       setActionLoading(null);
     }
@@ -159,12 +283,20 @@ export default function AgentList() {
         <div style={{ color: colors.subtext0, fontSize: '14px' }}>
           {agents.length} agent{agents.length !== 1 ? 's' : ''} registered
         </div>
-        <button
-          onClick={() => fetchAgents()}
-          style={{ ...baseStyles.button.secondary, fontSize: '13px', padding: '6px 12px' }}
-        >
-          Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => fetchAgents()}
+            style={{ ...baseStyles.button.secondary, fontSize: '13px', padding: '6px 12px' }}
+          >
+            Refresh
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            style={{ ...baseStyles.button.primary, fontSize: '13px' }}
+          >
+            + New Agent
+          </button>
+        </div>
       </div>
 
       {selected && (
@@ -211,7 +343,7 @@ export default function AgentList() {
                   <td style={baseStyles.td}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontWeight: '500' }}>{agent.name}</span>
-                      {agent.is_lead && (
+                      {!!agent.is_lead && (
                         <span
                           style={{
                             fontSize: '11px',
@@ -227,7 +359,7 @@ export default function AgentList() {
                     </div>
                   </td>
                   <td style={{ ...baseStyles.td, color: colors.subtext0 }}>
-                    {agent.personality.role}
+                    {agent.role}
                   </td>
                   <td style={baseStyles.td}>
                     <StatusBadge status={agent.status} />
@@ -276,6 +408,22 @@ export default function AgentList() {
                           Stop
                         </button>
                       )}
+                      <button
+                        onClick={() => handleDelete(agent.id)}
+                        disabled={actionLoading === agent.id + '-delete'}
+                        style={{
+                          backgroundColor: 'transparent',
+                          color: colors.red,
+                          border: `1px solid ${colors.red}44`,
+                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          opacity: actionLoading === agent.id + '-delete' ? 0.6 : 1,
+                        }}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -284,6 +432,8 @@ export default function AgentList() {
           </table>
         </div>
       )}
+
+      {showModal && <NewAgentModal onClose={() => setShowModal(false)} onSubmit={handleCreate} />}
     </div>
   );
 }

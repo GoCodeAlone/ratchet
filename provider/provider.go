@@ -49,11 +49,11 @@ type Usage struct {
 
 // StreamEvent is emitted during streaming responses.
 type StreamEvent struct {
-	Type    string    `json:"type"` // "text", "tool_call", "done", "error"
-	Text    string    `json:"text,omitempty"`
-	Tool    *ToolCall `json:"tool,omitempty"`
-	Error   string    `json:"error,omitempty"`
-	Usage   *Usage    `json:"usage,omitempty"`
+	Type  string    `json:"type"` // "text", "tool_call", "done", "error"
+	Text  string    `json:"text,omitempty"`
+	Tool  *ToolCall `json:"tool,omitempty"`
+	Error string    `json:"error,omitempty"`
+	Usage *Usage    `json:"usage,omitempty"`
 }
 
 // Provider is an AI backend that powers agent reasoning.

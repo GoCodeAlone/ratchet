@@ -30,6 +30,7 @@ export const colors = {
 
 export const statusColors: Record<string, string> = {
   idle: colors.blue,
+  active: colors.green,
   working: colors.green,
   waiting: colors.yellow,
   stopped: colors.overlay0,
@@ -40,6 +41,8 @@ export const statusColors: Record<string, string> = {
   completed: colors.teal,
   failed: colors.red,
   canceled: colors.overlay0,
+  // Project statuses
+  archived: colors.overlay0,
 };
 
 export const baseStyles = {

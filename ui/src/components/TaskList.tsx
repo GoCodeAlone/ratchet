@@ -340,6 +340,7 @@ export default function TaskList() {
                 <th style={baseStyles.th}>Status</th>
                 <th style={baseStyles.th}>Priority</th>
                 <th style={baseStyles.th}>Assigned To</th>
+                <th style={baseStyles.th}>Project</th>
                 <th style={baseStyles.th}>Updated</th>
               </tr>
             </thead>
@@ -369,6 +370,9 @@ export default function TaskList() {
                   </td>
                   <td style={{ ...baseStyles.td, color: colors.subtext0 }}>
                     {task.assigned_to || '—'}
+                  </td>
+                  <td style={{ ...baseStyles.td, color: colors.subtext0, fontSize: '12px', fontFamily: 'monospace' }}>
+                    {task.project_id || '—'}
                   </td>
                   <td style={{ ...baseStyles.td, color: colors.subtext0, fontSize: '12px' }}>
                     {task.updated_at
