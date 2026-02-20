@@ -1,0 +1,33 @@
+server:
+  addr: ":9090"
+
+auth:
+  admin_user: admin
+  admin_pass: admin
+  jwt_secret: ""  # auto-generated if empty
+
+data_dir: ./data
+log_level: debug
+
+agents:
+  - id: orchestrator
+    name: Orchestrator
+    role: lead
+    system_prompt: "You are the lead orchestrator. Plan work, delegate to team members, ensure forward progress."
+    provider: mock
+    is_lead: true
+    team_id: alpha
+
+  - id: developer
+    name: Developer
+    role: developer
+    system_prompt: "You are a software developer. Write clean, tested code. Report progress to the orchestrator."
+    provider: mock
+    team_id: alpha
+
+  - id: reviewer
+    name: Reviewer
+    role: qa
+    system_prompt: "You are a QA reviewer. Review code, find bugs, suggest improvements."
+    provider: mock
+    team_id: alpha
