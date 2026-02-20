@@ -43,7 +43,7 @@ func New() *RatchetPlugin {
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
 				StepTypes:   []string{"step.agent_execute", "step.workspace_init"},
-				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry"},
+				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder"},
 			},
 		},
 	}
@@ -80,6 +80,7 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 		authTokenHook(),
 		secretsGuardHook(),
 		toolRegistryHook(),
+		transcriptRecorderHook(),
 	}
 }
 
@@ -151,6 +152,36 @@ func toolRegistryHook() plugin.WiringHook {
 
 			// Register in service registry
 			app.RegisterService("ratchet-tool-registry", registry)
+			return nil
+		},
+	}
+}
+
+// transcriptRecorderHook creates a TranscriptRecorder and registers it.
+func transcriptRecorderHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.transcript_recorder",
+		Priority: 75,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			// Get DB
+			var db *sql.DB
+			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok {
+					db = dbp.DB()
+				}
+			}
+			if db == nil {
+				return nil // no DB, skip
+			}
+
+			// Get SecretGuard (optional)
+			var guard *SecretGuard
+			if svc, ok := app.SvcRegistry()["ratchet-secret-guard"]; ok {
+				guard, _ = svc.(*SecretGuard)
+			}
+
+			recorder := NewTranscriptRecorder(db, guard)
+			app.RegisterService("ratchet-transcript-recorder", recorder)
 			return nil
 		},
 	}
