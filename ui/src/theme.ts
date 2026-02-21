@@ -43,6 +43,11 @@ export const statusColors: Record<string, string> = {
   canceled: colors.overlay0,
   // Project statuses
   archived: colors.overlay0,
+  // Repo statuses
+  cloning: colors.blue,
+  cloned: colors.teal,
+  // Container statuses
+  running: colors.green,
 };
 
 export const baseStyles = {

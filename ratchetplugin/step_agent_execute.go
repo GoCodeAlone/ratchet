@@ -7,6 +7,7 @@ import (
 
 	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 	"github.com/GoCodeAlone/workflow/module"
 	"github.com/GoCodeAlone/workflow/plugin"
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ type AgentExecuteStep struct {
 	toolRegistry    *ToolRegistry
 	guard           *SecretGuard
 	recorder        *TranscriptRecorder
+	containerMgr    *ContainerManager
 }
 
 func (s *AgentExecuteStep) Name() string { return s.name }
@@ -55,6 +57,32 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 	agentID := extractString(pc.Current, "agent_id", agentName)
 	taskID := extractString(pc.Current, "task_id", extractString(pc.Current, "id", ""))
 	projectID := extractString(pc.Current, "project_id", "")
+
+	// Build enriched context with workspace/container info
+	toolCtx := ctx
+	if projectID != "" {
+		toolCtx = tools.WithProjectID(toolCtx, projectID)
+
+		// Look up project workspace path from DB
+		if s.app != nil {
+			if svc, ok := s.app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok && dbp.DB() != nil {
+					var wsPath string
+					row := dbp.DB().QueryRowContext(ctx,
+						"SELECT workspace_path FROM projects WHERE id = ?", projectID,
+					)
+					if row.Scan(&wsPath) == nil && wsPath != "" {
+						toolCtx = tools.WithWorkspacePath(toolCtx, wsPath)
+					}
+				}
+			}
+		}
+
+		// If container manager is available, inject it as ContainerExecer
+		if s.containerMgr != nil && s.containerMgr.IsAvailable() {
+			toolCtx = context.WithValue(toolCtx, tools.ContextKeyContainerID, tools.ContainerExecer(s.containerMgr))
+		}
+	}
 
 	// Build initial conversation
 	messages := []provider.Message{
@@ -131,7 +159,7 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		for _, tc := range resp.ToolCalls {
 			var resultStr string
 			if s.toolRegistry != nil {
-				result, execErr := s.toolRegistry.Execute(ctx, tc.Name, tc.Arguments)
+				result, execErr := s.toolRegistry.Execute(toolCtx, tc.Name, tc.Arguments)
 				if execErr != nil {
 					resultStr = fmt.Sprintf("Error: %v", execErr)
 				} else {
@@ -233,6 +261,13 @@ func newAgentExecuteStepFactory() plugin.StepFactory {
 		if svc, ok := app.SvcRegistry()["ratchet-transcript-recorder"]; ok {
 			if rec, ok := svc.(*TranscriptRecorder); ok {
 				step.recorder = rec
+			}
+		}
+
+		// Look up ContainerManager from service registry
+		if svc, ok := app.SvcRegistry()["ratchet-container-manager"]; ok {
+			if cm, ok := svc.(*ContainerManager); ok {
+				step.containerMgr = cm
 			}
 		}
 

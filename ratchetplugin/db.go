@@ -99,6 +99,32 @@ CREATE TABLE IF NOT EXISTS mcp_servers (
     created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );`
 
+const createProjectReposTable = `
+CREATE TABLE IF NOT EXISTS project_repos (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    repo_url TEXT NOT NULL,
+    clone_path TEXT NOT NULL DEFAULT '',
+    branch TEXT NOT NULL DEFAULT 'main',
+    auth_token_secret TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    last_synced_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);`
+
+const createWorkspaceContainersTable = `
+CREATE TABLE IF NOT EXISTS workspace_containers (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL UNIQUE,
+    container_id TEXT NOT NULL DEFAULT '',
+    image TEXT NOT NULL DEFAULT 'ubuntu:22.04',
+    status TEXT NOT NULL DEFAULT 'pending',
+    compose_file TEXT NOT NULL DEFAULT '',
+    error_message TEXT NOT NULL DEFAULT '',
+    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);`
+
 // dbInitHook creates a WiringHook that initialises the ratchet database tables
 // and seeds agents from the YAML config.
 func dbInitHook() plugin.WiringHook {
@@ -136,7 +162,7 @@ func dbInitHook() plugin.WiringHook {
 			db.SetMaxOpenConns(1)
 
 			// Create tables
-			for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable} {
+			for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable, createProjectReposTable, createWorkspaceContainersTable} {
 				if _, err := db.Exec(ddl); err != nil {
 					return fmt.Errorf("ratchet.db_init: create table: %w", err)
 				}
@@ -144,6 +170,9 @@ func dbInitHook() plugin.WiringHook {
 
 			// Add project_id column to tasks if missing (for existing databases)
 			_, _ = db.Exec("ALTER TABLE tasks ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
+
+			// Add workspace_spec column to projects if missing (for existing databases)
+			_, _ = db.Exec("ALTER TABLE projects ADD COLUMN workspace_spec TEXT NOT NULL DEFAULT '{}'")
 
 			// Seed agents from config modules
 			if cfg == nil {

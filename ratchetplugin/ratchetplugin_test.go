@@ -996,7 +996,7 @@ func TestPlugin_StepFactories(t *testing.T) {
 	p := New()
 	factories := p.StepFactories()
 
-	expected := []string{"step.agent_execute", "step.workspace_init"}
+	expected := []string{"step.agent_execute", "step.workspace_init", "step.container_control"}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {
 			t.Errorf("missing step factory: %s", name)
@@ -1011,16 +1011,17 @@ func TestPlugin_WiringHooks(t *testing.T) {
 	p := New()
 	hooks := p.WiringHooks()
 
-	if len(hooks) != 5 {
-		t.Fatalf("expected 5 wiring hooks, got %d", len(hooks))
+	if len(hooks) != 6 {
+		t.Fatalf("expected 6 wiring hooks, got %d", len(hooks))
 	}
 
 	expectedNames := map[string]bool{
-		"ratchet.db_init":              false,
-		"ratchet.auth_token":           false,
-		"ratchet.secrets_guard":        false,
-		"ratchet.tool_registry":        false,
-		"ratchet.transcript_recorder":  false,
+		"ratchet.db_init":             false,
+		"ratchet.auth_token":          false,
+		"ratchet.secrets_guard":       false,
+		"ratchet.tool_registry":       false,
+		"ratchet.container_manager":   false,
+		"ratchet.transcript_recorder": false,
 	}
 	for _, h := range hooks {
 		if _, ok := expectedNames[h.Name]; !ok {

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/workflow/module"
@@ -56,10 +58,14 @@ func (s *WorkspaceInitStep) Execute(ctx context.Context, pc *module.PipelineCont
 	// Update project workspace_path in DB if we have a DB provider
 	if svc, ok := s.app.SvcRegistry()["ratchet-db"]; ok {
 		if dbp, ok := svc.(module.DBProvider); ok && dbp.DB() != nil {
-			_, _ = dbp.DB().ExecContext(ctx,
+			db := dbp.DB()
+			_, _ = db.ExecContext(ctx,
 				"UPDATE projects SET workspace_path = ?, updated_at = datetime('now') WHERE id = ?",
 				wsPath, projectID,
 			)
+
+			// Clone pending repos for this project
+			s.clonePendingRepos(ctx, projectID, wsPath)
 		}
 	}
 
@@ -86,4 +92,83 @@ func newWorkspaceInitFactory() plugin.StepFactory {
 			tmpl:          module.NewTemplateEngine(),
 		}, nil
 	}
+}
+
+// clonePendingRepos queries project_repos for pending repos and clones them into workspace/src/.
+func (s *WorkspaceInitStep) clonePendingRepos(ctx context.Context, projectID, wsPath string) {
+	type repoRow struct {
+		ID      string
+		RepoURL string
+		Branch  string
+	}
+
+	// Use the raw *sql.DB for query
+	svc, ok := s.app.SvcRegistry()["ratchet-db"]
+	if !ok {
+		return
+	}
+	dbp, ok := svc.(module.DBProvider)
+	if !ok || dbp.DB() == nil {
+		return
+	}
+	sqlDB := dbp.DB()
+
+	rows, err := sqlDB.QueryContext(ctx, "SELECT id, repo_url, branch FROM project_repos WHERE project_id = ? AND status = 'pending'", projectID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	var repos []repoRow
+	for rows.Next() {
+		var r repoRow
+		if err := rows.Scan(&r.ID, &r.RepoURL, &r.Branch); err != nil {
+			continue
+		}
+		repos = append(repos, r)
+	}
+
+	srcDir := filepath.Join(wsPath, "src")
+	for _, repo := range repos {
+		// Derive repo name from URL
+		repoName := repoNameFromURL(repo.RepoURL)
+		clonePath := filepath.Join(srcDir, repoName)
+
+		branch := repo.Branch
+		if branch == "" {
+			branch = "main"
+		}
+
+		cloneURL := repo.RepoURL
+		if token := os.Getenv("GITHUB_TOKEN"); token != "" && strings.HasPrefix(repo.RepoURL, "https://") {
+			cloneURL = strings.Replace(repo.RepoURL, "https://", "https://"+token+"@", 1)
+		}
+
+		cmd := exec.CommandContext(ctx, "git", "clone", "--branch", branch, cloneURL, clonePath)
+		if err := cmd.Run(); err != nil {
+			// Update status to 'error'
+			_, _ = sqlDB.ExecContext(ctx, "UPDATE project_repos SET status = 'error' WHERE id = ?", repo.ID)
+			continue
+		}
+
+		// Update status to 'cloned' and set clone_path
+		_, _ = sqlDB.ExecContext(ctx,
+			"UPDATE project_repos SET status = 'cloned', clone_path = ?, last_synced_at = datetime('now') WHERE id = ?",
+			clonePath, repo.ID,
+		)
+	}
+}
+
+// repoNameFromURL extracts a repo name from a git URL.
+func repoNameFromURL(url string) string {
+	// Handle trailing .git
+	url = strings.TrimSuffix(url, ".git")
+	// Handle trailing slash
+	url = strings.TrimSuffix(url, "/")
+	// Get last path component
+	parts := strings.Split(url, "/")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return "repo"
 }

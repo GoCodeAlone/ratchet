@@ -1,4 +1,4 @@
-import type { Project, TranscriptEntry, AgentInfo, Task } from '../types';
+import type { Project, TranscriptEntry, AgentInfo, Task, ProjectRepo, ContainerStatus, WorkspaceSpec } from '../types';
 
 const API_BASE = '/api';
 
@@ -54,7 +54,7 @@ export async function apiDelete<T>(path: string): Promise<T> {
 
 // Projects
 export const fetchProjects = () => apiGet<Project[]>('/projects');
-export const createProject = (data: { name: string; description?: string }) => apiPost<Project>('/projects', data);
+export const createProject = (data: { name: string; description?: string; workspace_spec?: WorkspaceSpec }) => apiPost<Project>('/projects', data);
 export const fetchProject = (id: string) => apiGet<Project>(`/projects/${id}`);
 export const updateProject = (id: string, data: Partial<Project>) => apiPatch<Project>(`/projects/${id}`, data);
 export const fetchProjectTasks = (id: string) => apiGet<Task[]>(`/projects/${id}/tasks`);
@@ -64,6 +64,16 @@ export const fetchProjectTranscripts = (id: string) => apiGet<TranscriptEntry[]>
 export const createAgent = (data: { name: string; role?: string; system_prompt?: string; team_id?: string }) => apiPost<AgentInfo>('/agents', data);
 export const deleteAgent = (id: string) => apiDelete<void>(`/agents/${id}`);
 export const updateAgent = (id: string, data: Partial<AgentInfo>) => apiPatch<AgentInfo>(`/agents/${id}`, data);
+
+// Project Repos
+export const fetchProjectRepos = (projectId: string) => apiGet<ProjectRepo[]>(`/projects/${projectId}/repos`);
+export const addProjectRepo = (projectId: string, data: { repo_url: string; branch?: string }) => apiPost<ProjectRepo>(`/projects/${projectId}/repos`, data);
+export const removeProjectRepo = (projectId: string, repoId: string) => apiDelete<void>(`/projects/${projectId}/repos/${repoId}`);
+
+// Container Control
+export const startContainer = (projectId: string) => apiPost<ContainerStatus>(`/projects/${projectId}/container/start`);
+export const stopContainer = (projectId: string) => apiPost<ContainerStatus>(`/projects/${projectId}/container/stop`);
+export const getContainerStatus = (projectId: string) => apiGet<ContainerStatus>(`/projects/${projectId}/container/status`);
 
 // Transcripts
 export const fetchTranscripts = () => apiGet<TranscriptEntry[]>('/transcripts');

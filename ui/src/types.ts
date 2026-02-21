@@ -56,6 +56,7 @@ export interface Project {
   description: string;
   workspace_path: string;
   status: 'active' | 'archived' | 'completed';
+  workspace_spec?: WorkspaceSpec;
   created_at: string;
   updated_at: string;
 }
@@ -83,4 +84,34 @@ export interface MCPServer {
   url: string;
   status: 'active' | 'inactive';
   created_at: string;
+}
+
+export interface WorkspaceSpec {
+  image?: string;
+  init_commands?: string[];
+  env?: Record<string, string>;
+  memory_limit?: number;
+  cpu_limit?: number;
+  network_mode?: string;
+}
+
+export interface ProjectRepo {
+  id: string;
+  project_id: string;
+  repo_url: string;
+  clone_path: string;
+  branch: string;
+  status: 'pending' | 'cloning' | 'cloned' | 'error';
+  last_synced_at: string;
+  created_at: string;
+}
+
+export interface ContainerStatus {
+  project_id: string;
+  container_id: string;
+  image: string;
+  status: 'pending' | 'running' | 'stopped' | 'error';
+  error_message: string;
+  created_at: string;
+  updated_at: string;
 }

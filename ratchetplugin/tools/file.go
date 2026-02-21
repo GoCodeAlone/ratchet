@@ -50,12 +50,16 @@ func (t *FileReadTool) Definition() provider.ToolDef {
 		},
 	}
 }
-func (t *FileReadTool) Execute(_ context.Context, args map[string]any) (any, error) {
+func (t *FileReadTool) Execute(ctx context.Context, args map[string]any) (any, error) {
 	path, _ := args["path"].(string)
 	if path == "" {
 		return nil, fmt.Errorf("path is required")
 	}
-	absPath, err := validatePath(t.Workspace, path)
+	workspace := t.Workspace
+	if ws, ok := WorkspacePathFromContext(ctx); ok {
+		workspace = ws
+	}
+	absPath, err := validatePath(workspace, path)
 	if err != nil {
 		return nil, err
 	}
@@ -87,13 +91,17 @@ func (t *FileWriteTool) Definition() provider.ToolDef {
 		},
 	}
 }
-func (t *FileWriteTool) Execute(_ context.Context, args map[string]any) (any, error) {
+func (t *FileWriteTool) Execute(ctx context.Context, args map[string]any) (any, error) {
 	path, _ := args["path"].(string)
 	content, _ := args["content"].(string)
 	if path == "" {
 		return nil, fmt.Errorf("path is required")
 	}
-	absPath, err := validatePath(t.Workspace, path)
+	workspace := t.Workspace
+	if ws, ok := WorkspacePathFromContext(ctx); ok {
+		workspace = ws
+	}
+	absPath, err := validatePath(workspace, path)
 	if err != nil {
 		return nil, err
 	}
@@ -125,12 +133,16 @@ func (t *FileListTool) Definition() provider.ToolDef {
 		},
 	}
 }
-func (t *FileListTool) Execute(_ context.Context, args map[string]any) (any, error) {
+func (t *FileListTool) Execute(ctx context.Context, args map[string]any) (any, error) {
 	path, _ := args["path"].(string)
 	if path == "" {
 		path = "."
 	}
-	absPath, err := validatePath(t.Workspace, path)
+	workspace := t.Workspace
+	if ws, ok := WorkspacePathFromContext(ctx); ok {
+		workspace = ws
+	}
+	absPath, err := validatePath(workspace, path)
 	if err != nil {
 		return nil, err
 	}

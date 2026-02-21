@@ -4,9 +4,10 @@ import { Project } from '../types';
 import { fetchProjects, createProject } from '../utils/api';
 import ProjectDetail from './ProjectDetail';
 
-function NewProjectModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (name: string, description: string) => Promise<void> }) {
+function NewProjectModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (name: string, description: string, workspaceImage: string) => Promise<void> }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [workspaceImage, setWorkspaceImage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -16,7 +17,7 @@ function NewProjectModal({ onClose, onSubmit }: { onClose: () => void; onSubmit:
     setLoading(true);
     setError('');
     try {
-      await onSubmit(name.trim(), description.trim());
+      await onSubmit(name.trim(), description.trim(), workspaceImage.trim());
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create project');
@@ -39,9 +40,13 @@ function NewProjectModal({ onClose, onSubmit }: { onClose: () => void; onSubmit:
             <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Name *</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" required autoFocus style={baseStyles.input} />
           </div>
-          <div style={{ marginBottom: '20px' }}>
+          <div style={{ marginBottom: '14px' }}>
             <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Description</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional project description" rows={3} style={{ ...baseStyles.input, resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Workspace Image</label>
+            <input type="text" value={workspaceImage} onChange={(e) => setWorkspaceImage(e.target.value)} placeholder="e.g. ubuntu:22.04 (optional)" style={baseStyles.input} />
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button type="button" onClick={onClose} style={baseStyles.button.secondary}>Cancel</button>
@@ -76,8 +81,12 @@ export default function ProjectList() {
 
   useEffect(() => { load(); }, []);
 
-  async function handleCreate(name: string, description: string) {
-    await createProject({ name, description });
+  async function handleCreate(name: string, description: string, workspaceImage: string) {
+    const data: Parameters<typeof createProject>[0] = { name, description };
+    if (workspaceImage) {
+      data.workspace_spec = { image: workspaceImage };
+    }
+    await createProject(data);
     await load();
   }
 
@@ -112,6 +121,7 @@ export default function ProjectList() {
               <tr style={{ backgroundColor: colors.mantle }}>
                 <th style={baseStyles.th}>Name</th>
                 <th style={baseStyles.th}>Description</th>
+                <th style={baseStyles.th}>Image</th>
                 <th style={baseStyles.th}>Status</th>
                 <th style={baseStyles.th}>Created</th>
               </tr>
@@ -120,8 +130,11 @@ export default function ProjectList() {
               {projects.map((p) => (
                 <tr key={p.id} onClick={() => setSelected(p)} style={{ cursor: 'pointer' }}>
                   <td style={{ ...baseStyles.td, fontWeight: '500' }}>{p.name}</td>
-                  <td style={{ ...baseStyles.td, color: colors.subtext0, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td style={{ ...baseStyles.td, color: colors.subtext0, maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.description || '—'}
+                  </td>
+                  <td style={{ ...baseStyles.td, color: colors.subtext0, fontFamily: 'monospace', fontSize: '12px' }}>
+                    {p.workspace_spec?.image || '—'}
                   </td>
                   <td style={baseStyles.td}>
                     <span style={{ fontSize: '12px', color: statusColors[p.status] ?? colors.overlay0, backgroundColor: `${statusColors[p.status] ?? colors.overlay0}22`, padding: '2px 10px', borderRadius: '10px', textTransform: 'capitalize' }}>

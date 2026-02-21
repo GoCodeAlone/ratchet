@@ -10,6 +10,12 @@ import (
 	"github.com/GoCodeAlone/ratchet/provider"
 )
 
+// ContainerExecer is the interface for executing commands in a container.
+// This avoids a circular dependency on the ContainerManager type.
+type ContainerExecer interface {
+	ExecInContainer(ctx context.Context, projectID, command, workDir string, timeout int) (stdout, stderr string, exitCode int, err error)
+}
+
 // ShellExecTool executes a command in the project workspace.
 type ShellExecTool struct {
 	Workspace string
@@ -47,12 +53,33 @@ func (t *ShellExecTool) Execute(ctx context.Context, args map[string]any) (any, 
 		timeout = 300
 	}
 
+	// Check for container-aware execution via context
+	if cExec, ok := ctx.Value(ContextKeyContainerID).(ContainerExecer); ok {
+		if projectID, ok := ProjectIDFromContext(ctx); ok {
+			stdout, stderr, exitCode, err := cExec.ExecInContainer(ctx, projectID, command, "/workspace", timeout)
+			if err != nil {
+				return nil, fmt.Errorf("container exec: %w", err)
+			}
+			return map[string]any{
+				"stdout":    stdout,
+				"stderr":    stderr,
+				"exit_code": exitCode,
+			}, nil
+		}
+	}
+
+	// Host execution fallback
+	workspace := t.Workspace
+	if ws, ok := WorkspacePathFromContext(ctx); ok {
+		workspace = ws
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-	if t.Workspace != "" {
-		cmd.Dir = t.Workspace
+	if workspace != "" {
+		cmd.Dir = workspace
 	}
 
 	var stdout, stderr bytes.Buffer

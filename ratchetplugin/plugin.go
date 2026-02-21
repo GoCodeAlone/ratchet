@@ -42,8 +42,8 @@ func New() *RatchetPlugin {
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init"},
-				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control"},
+				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager"},
 			},
 		},
 	}
@@ -68,8 +68,9 @@ func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 // StepFactories returns the pipeline step factories registered by this plugin.
 func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 	return map[string]plugin.StepFactory{
-		"step.agent_execute":  newAgentExecuteStepFactory(),
-		"step.workspace_init": newWorkspaceInitFactory(),
+		"step.agent_execute":     newAgentExecuteStepFactory(),
+		"step.workspace_init":    newWorkspaceInitFactory(),
+		"step.container_control": newContainerControlFactory(),
 	}
 }
 
@@ -80,6 +81,7 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 		authTokenHook(),
 		secretsGuardHook(),
 		toolRegistryHook(),
+		containerManagerHook(),
 		transcriptRecorderHook(),
 	}
 }
@@ -144,6 +146,13 @@ func toolRegistryHook() plugin.WiringHook {
 			registry.Register(&tools.ShellExecTool{})
 			registry.Register(&tools.WebFetchTool{})
 
+			// Register git tools
+			registry.Register(&tools.GitCloneTool{})
+			registry.Register(&tools.GitStatusTool{})
+			registry.Register(&tools.GitCommitTool{})
+			registry.Register(&tools.GitPushTool{})
+			registry.Register(&tools.GitDiffTool{})
+
 			if db != nil {
 				registry.Register(&tools.TaskCreateTool{DB: db})
 				registry.Register(&tools.TaskUpdateTool{DB: db})
@@ -152,6 +161,25 @@ func toolRegistryHook() plugin.WiringHook {
 
 			// Register in service registry
 			app.RegisterService("ratchet-tool-registry", registry)
+			return nil
+		},
+	}
+}
+
+// containerManagerHook creates a ContainerManager and registers it in the service registry.
+func containerManagerHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.container_manager",
+		Priority: 82,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			var db *sql.DB
+			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok {
+					db = dbp.DB()
+				}
+			}
+			cm := NewContainerManager(db)
+			app.RegisterService("ratchet-container-manager", cm)
 			return nil
 		},
 	}
