@@ -42,7 +42,7 @@ func New() *RatchetPlugin {
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config"},
 				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager", "ratchet.provider_registry"},
 			},
 		},
@@ -73,6 +73,7 @@ func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 		"step.container_control": newContainerControlFactory(),
 		"step.secret_manage":     newSecretManageFactory(),
 		"step.provider_test":     newProviderTestFactory(),
+		"step.vault_config":      newVaultConfigFactory(),
 	}
 }
 
@@ -95,38 +96,65 @@ func (p *RatchetPlugin) ModuleSchemas() []*schema.ModuleSchema {
 }
 
 // secretsGuardHook creates a SecretGuard and registers it in the service registry.
-// It uses a FileProvider for persistent secret storage by default.
-// Set RATCHET_SECRETS_BACKEND=vault-dev to use a managed HashiCorp Vault dev server.
+// It defaults to vault-dev (managed HashiCorp Vault dev server).
+// Backend selection priority:
+//  1. data/vault-config.json (vault-remote or vault-dev)
+//  2. Default: vault-dev
+//  3. Fallback: FileProvider if vault binary is not available
+//
 // Also loads RATCHET_* environment variables for backward compatibility.
 func secretsGuardHook() plugin.WiringHook {
 	return plugin.WiringHook{
 		Name:     "ratchet.secrets_guard",
 		Priority: 85,
 		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
-			var provider secrets.Provider
+			var sp secrets.Provider
+			backendName := "vault-dev"
 
-			backend := os.Getenv("RATCHET_SECRETS_BACKEND")
-			switch backend {
-			case "vault-dev":
-				dp, err := secrets.NewDevVaultProvider(secrets.DevVaultConfig{})
+			// Check for saved vault config
+			vcfg, _ := LoadVaultConfig(vaultConfigDir())
+
+			if vcfg != nil && vcfg.Backend == "vault-remote" && vcfg.Address != "" && vcfg.Token != "" {
+				// Use remote vault from saved config
+				vp, err := secrets.NewVaultProvider(secrets.VaultConfig{
+					Address:   vcfg.Address,
+					Token:     vcfg.Token,
+					MountPath: vcfg.MountPath,
+					Namespace: vcfg.Namespace,
+				})
 				if err != nil {
-					app.Logger().Warn("vault-dev backend requested but vault binary not available, falling back to file provider", "error", err)
-					provider = newFileProvider(app)
+					app.Logger().Warn("vault-remote config found but connection failed, falling back to vault-dev", "error", err)
 				} else {
-					provider = dp
-					// Register for cleanup on shutdown
-					app.RegisterService("ratchet-vault-dev", dp)
+					sp = vp
+					backendName = "vault-remote"
 				}
-			default:
-				provider = newFileProvider(app)
 			}
 
-			guard := NewSecretGuard(provider)
+			// Default to vault-dev if no remote configured
+			if sp == nil {
+				dp, err := secrets.NewDevVaultProvider(secrets.DevVaultConfig{})
+				if err != nil {
+					app.Logger().Warn("vault-dev not available (vault binary not found), falling back to file provider", "error", err)
+					sp = newFileProvider(app)
+					backendName = "file"
+				} else {
+					sp = dp
+					backendName = "vault-dev"
+					_ = app.RegisterService("ratchet-vault-dev", dp)
+				}
+			}
+
+			guard := NewSecretGuard(sp, backendName)
 
 			ctx := context.Background()
 
-			// Load all file-based secrets (no-op for vault provider)
+			// Load all secrets from the provider
 			_ = guard.LoadAllSecrets(ctx)
+
+			// Register vault token for redaction if using remote vault
+			if vcfg != nil && vcfg.Token != "" {
+				guard.AddKnownSecret("VAULT_TOKEN", vcfg.Token)
+			}
 
 			// Backward compat: also load RATCHET_* env vars into SecretGuard
 			// (These are loaded for redaction only; the env provider is not the primary store.)
@@ -141,8 +169,10 @@ func secretsGuardHook() plugin.WiringHook {
 				}
 			}
 
+			app.Logger().Info("secrets backend initialized", "backend", backendName)
+
 			// Register in service registry
-			app.RegisterService("ratchet-secret-guard", guard)
+			_ = app.RegisterService("ratchet-secret-guard", guard)
 			return nil
 		},
 	}
@@ -186,7 +216,7 @@ func providerRegistryHook() plugin.WiringHook {
 			}
 
 			registry := NewProviderRegistry(db, sp)
-			app.RegisterService("ratchet-provider-registry", registry)
+			_ = app.RegisterService("ratchet-provider-registry", registry)
 			return nil
 		},
 	}
@@ -229,7 +259,7 @@ func toolRegistryHook() plugin.WiringHook {
 			}
 
 			// Register in service registry
-			app.RegisterService("ratchet-tool-registry", registry)
+			_ = app.RegisterService("ratchet-tool-registry", registry)
 			return nil
 		},
 	}
@@ -248,7 +278,7 @@ func containerManagerHook() plugin.WiringHook {
 				}
 			}
 			cm := NewContainerManager(db)
-			app.RegisterService("ratchet-container-manager", cm)
+			_ = app.RegisterService("ratchet-container-manager", cm)
 			return nil
 		},
 	}
@@ -278,7 +308,7 @@ func transcriptRecorderHook() plugin.WiringHook {
 			}
 
 			recorder := NewTranscriptRecorder(db, guard)
-			app.RegisterService("ratchet-transcript-recorder", recorder)
+			_ = app.RegisterService("ratchet-transcript-recorder", recorder)
 			return nil
 		},
 	}

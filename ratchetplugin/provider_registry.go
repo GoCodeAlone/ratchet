@@ -96,6 +96,14 @@ func (r *ProviderRegistry) GetDefault(ctx context.Context) (provider.Provider, e
 	return r.createAndCache(ctx, cfg.Alias, &cfg)
 }
 
+// UpdateSecretsProvider swaps the underlying secrets provider and clears the cache.
+func (r *ProviderRegistry) UpdateSecretsProvider(p secrets.Provider) {
+	r.mu.Lock()
+	r.secrets = p
+	r.cache = make(map[string]provider.Provider)
+	r.mu.Unlock()
+}
+
 // InvalidateCache clears all cached providers.
 func (r *ProviderRegistry) InvalidateCache() {
 	r.mu.Lock()

@@ -101,3 +101,32 @@ export const setDefaultProvider = (alias: string) => apiPost<void>(`/providers/$
 export const listSecrets = () => apiGet<string[]>('/secrets');
 export const storeSecret = (key: string, value: string) => apiPut<void>(`/secrets/${key}`, { value });
 export const deleteSecret = (key: string) => apiDelete<void>(`/secrets/${key}`);
+
+// Vault Config
+export interface VaultStatus {
+  backend: string;
+  address: string;
+  mount_path: string;
+  namespace: string;
+}
+export interface VaultTestRequest {
+  address: string;
+  token: string;
+  mount_path?: string;
+  namespace?: string;
+}
+export interface VaultConfigureRequest extends VaultTestRequest {
+  migrate_secrets?: string;
+}
+export interface VaultResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  backend?: string;
+  migrated?: number;
+}
+export const fetchVaultStatus = () => apiGet<VaultStatus>('/vault/status');
+export const testVaultConnection = (req: VaultTestRequest) => apiPost<VaultResult>('/vault/test', req);
+export const configureVault = (req: VaultConfigureRequest) => apiPost<VaultResult>('/vault/configure', req);
+export const migrateVaultSecrets = () => apiPost<VaultResult>('/vault/migrate', {});
+export const resetVault = () => apiPost<VaultResult>('/vault/reset', {});

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { colors, baseStyles } from '../theme';
 import { apiGet } from '../utils/api';
 import ProviderList from './ProviderList';
+import VaultSettings from './VaultSettings';
 
 interface ServerInfo {
   version: string;
@@ -110,6 +111,9 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {/* Vault Settings */}
+      <VaultSettings />
 
       {/* AI Providers */}
       <ProviderList />

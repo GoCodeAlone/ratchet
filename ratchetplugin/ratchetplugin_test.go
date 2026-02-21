@@ -131,7 +131,7 @@ func createAllTables(t *testing.T, db *sql.DB) {
 
 func TestNewSecretGuard(t *testing.T) {
 	p := &mockSecretsProvider{secrets: map[string]string{}}
-	sg := NewSecretGuard(p)
+	sg := NewSecretGuard(p, "file")
 	if sg == nil {
 		t.Fatal("NewSecretGuard returned nil")
 	}
@@ -141,6 +141,9 @@ func TestNewSecretGuard(t *testing.T) {
 	if sg.knownValues == nil {
 		t.Fatal("knownValues map is nil")
 	}
+	if sg.BackendName() != "file" {
+		t.Errorf("BackendName: got %q, want %q", sg.BackendName(), "file")
+	}
 }
 
 func TestSecretGuard_LoadSecrets(t *testing.T) {
@@ -149,7 +152,7 @@ func TestSecretGuard_LoadSecrets(t *testing.T) {
 		"DB_PASS":  "super-secret",
 		"NO_VALUE": "",
 	}}
-	sg := NewSecretGuard(p)
+	sg := NewSecretGuard(p, "test")
 	ctx := context.Background()
 
 	err := sg.LoadSecrets(ctx, []string{"API_KEY", "DB_PASS", "NO_VALUE", "MISSING"})
@@ -175,7 +178,7 @@ func TestSecretGuard_LoadAllSecrets(t *testing.T) {
 	p := &mockSecretsProvider{secrets: map[string]string{
 		"TOKEN": "tok-xyz",
 	}}
-	sg := NewSecretGuard(p)
+	sg := NewSecretGuard(p, "test")
 
 	err := sg.LoadAllSecrets(context.Background())
 	if err != nil {
@@ -198,7 +201,7 @@ func TestSecretGuard_LoadAllSecrets_NilProvider(t *testing.T) {
 
 func TestSecretGuard_CheckAndRedact(t *testing.T) {
 	p := &mockSecretsProvider{secrets: map[string]string{"KEY": "secret123"}}
-	sg := NewSecretGuard(p)
+	sg := NewSecretGuard(p, "test")
 	_ = sg.LoadSecrets(context.Background(), []string{"KEY"})
 
 	msg := &provider.Message{Content: "the secret is secret123"}
@@ -213,7 +216,7 @@ func TestSecretGuard_CheckAndRedact(t *testing.T) {
 
 func TestSecretGuard_CheckAndRedact_NoChange(t *testing.T) {
 	p := &mockSecretsProvider{secrets: map[string]string{"KEY": "secret123"}}
-	sg := NewSecretGuard(p)
+	sg := NewSecretGuard(p, "test")
 	_ = sg.LoadSecrets(context.Background(), []string{"KEY"})
 
 	msg := &provider.Message{Content: "nothing to redact here"}
@@ -224,7 +227,7 @@ func TestSecretGuard_CheckAndRedact_NoChange(t *testing.T) {
 }
 
 func TestSecretGuard_Redact_NoSecretsLoaded(t *testing.T) {
-	sg := NewSecretGuard(&mockSecretsProvider{secrets: map[string]string{}})
+	sg := NewSecretGuard(&mockSecretsProvider{secrets: map[string]string{}}, "test")
 	text := "nothing secret here"
 	if got := sg.Redact(text); got != text {
 		t.Errorf("expected unchanged text, got %q", got)
@@ -237,7 +240,7 @@ func TestSecretGuard_ConcurrentAccess(t *testing.T) {
 		"B": "val-b",
 		"C": "val-c",
 	}}
-	sg := NewSecretGuard(p)
+	sg := NewSecretGuard(p, "test")
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -440,7 +443,7 @@ func TestTranscriptRecorder_SecretRedaction(t *testing.T) {
 	initTranscriptsTable(t, db)
 
 	p := &mockSecretsProvider{secrets: map[string]string{"API_KEY": "sk-secret-val"}}
-	sg := NewSecretGuard(p)
+	sg := NewSecretGuard(p, "test")
 	_ = sg.LoadAllSecrets(context.Background())
 
 	rec := NewTranscriptRecorder(db, sg)
@@ -841,7 +844,7 @@ func TestAgentExecuteStep_SimpleCompletion(t *testing.T) {
 	}
 
 	// Set up guard
-	sg := NewSecretGuard(&mockSecretsProvider{secrets: map[string]string{}})
+	sg := NewSecretGuard(&mockSecretsProvider{secrets: map[string]string{}}, "test")
 
 	// Set up recorder
 	rec := NewTranscriptRecorder(db, sg)
@@ -909,7 +912,7 @@ func TestAgentExecuteStep_SecretRedaction(t *testing.T) {
 	mp := &mockProvider{responses: []string{"Done."}}
 	providerMod := &AIProviderModule{name: "ratchet-ai", provider: mp}
 
-	sg := NewSecretGuard(&mockSecretsProvider{secrets: map[string]string{"PASS": "my-secret-pass"}})
+	sg := NewSecretGuard(&mockSecretsProvider{secrets: map[string]string{"PASS": "my-secret-pass"}}, "test")
 	_ = sg.LoadAllSecrets(context.Background())
 
 	rec := NewTranscriptRecorder(db, sg)
@@ -993,7 +996,7 @@ func TestPlugin_StepFactories(t *testing.T) {
 	p := New()
 	factories := p.StepFactories()
 
-	expected := []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test"}
+	expected := []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config"}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {
 			t.Errorf("missing step factory: %s", name)

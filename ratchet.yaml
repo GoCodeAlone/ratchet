@@ -207,6 +207,7 @@ workflows:
               config:
                 status: 200
                 body:
+                  # Must match RATCHET_AUTH_TOKEN env var (or this default when unset)
                   token: "ratchet-dev-token-change-me-in-production"
                   user:
                     id: "admin"
@@ -914,6 +915,103 @@ workflows:
               config:
                 status: 200
                 body_from: "steps.delete-secret"
+
+      # ============================================================
+      # VAULT CONFIG ROUTES (auth required)
+      # ============================================================
+
+      # Get vault backend status
+      - method: GET
+        path: "/api/vault/status"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: get-status
+              type: step.vault_config
+              config:
+                action: get_status
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-status"
+
+      # Test connection to a remote vault
+      - method: POST
+        path: "/api/vault/test"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: test-vault
+              type: step.vault_config
+              config:
+                action: test
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.test-vault"
+
+      # Configure remote vault backend
+      - method: POST
+        path: "/api/vault/configure"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: configure-vault
+              type: step.vault_config
+              config:
+                action: configure
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.configure-vault"
+
+      # Migrate secrets between backends
+      - method: POST
+        path: "/api/vault/migrate"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: migrate-vault
+              type: step.vault_config
+              config:
+                action: migrate
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.migrate-vault"
+
+      # Reset vault to default (vault-dev)
+      - method: POST
+        path: "/api/vault/reset"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: reset-vault
+              type: step.vault_config
+              config:
+                action: reset
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.reset-vault"
 
       # ============================================================
       # TRANSCRIPT ROUTES (auth required)
