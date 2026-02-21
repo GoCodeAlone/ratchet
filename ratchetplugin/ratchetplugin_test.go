@@ -862,9 +862,6 @@ func TestAgentExecuteStep_SimpleCompletion(t *testing.T) {
 		providerService: "ratchet-ai",
 		app:             app,
 		tmpl:            module.NewTemplateEngine(),
-		toolRegistry:    tr,
-		guard:           sg,
-		recorder:        rec,
 	}
 
 	pc := &module.PipelineContext{
@@ -918,6 +915,8 @@ func TestAgentExecuteStep_SecretRedaction(t *testing.T) {
 	rec := NewTranscriptRecorder(db, sg)
 	app := newMockApp()
 	app.services["ratchet-ai"] = providerMod
+	app.services["ratchet-secret-guard"] = sg
+	app.services["ratchet-transcript-recorder"] = rec
 
 	step := &AgentExecuteStep{
 		name:            "agent-exec",
@@ -925,8 +924,6 @@ func TestAgentExecuteStep_SecretRedaction(t *testing.T) {
 		providerService: "ratchet-ai",
 		app:             app,
 		tmpl:            module.NewTemplateEngine(),
-		guard:           sg,
-		recorder:        rec,
 	}
 
 	pc := &module.PipelineContext{

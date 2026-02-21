@@ -242,12 +242,14 @@ func TestContainerControlStep_Unavailable(t *testing.T) {
 		containers: make(map[string]string),
 		available:  false,
 	}
+	app := newMockApp()
+	app.services["ratchet-container-manager"] = cm
 
 	step := &ContainerControlStep{
-		name:         "cc",
-		action:       "status",
-		containerMgr: cm,
-		tmpl:         module.NewTemplateEngine(),
+		name:   "cc",
+		action: "status",
+		app:    app,
+		tmpl:   module.NewTemplateEngine(),
 	}
 
 	pc := &module.PipelineContext{
@@ -266,9 +268,12 @@ func TestContainerControlStep_Unavailable(t *testing.T) {
 }
 
 func TestContainerControlStep_NilManager(t *testing.T) {
+	app := newMockApp() // no container manager registered
+
 	step := &ContainerControlStep{
 		name:   "cc",
 		action: "status",
+		app:    app,
 		tmpl:   module.NewTemplateEngine(),
 	}
 
@@ -292,12 +297,14 @@ func TestContainerControlStep_UnknownAction(t *testing.T) {
 		containers: make(map[string]string),
 		available:  true,
 	}
+	app := newMockApp()
+	app.services["ratchet-container-manager"] = cm
 
 	step := &ContainerControlStep{
-		name:         "cc",
-		action:       "explode",
-		containerMgr: cm,
-		tmpl:         module.NewTemplateEngine(),
+		name:   "cc",
+		action: "explode",
+		app:    app,
+		tmpl:   module.NewTemplateEngine(),
 	}
 
 	pc := &module.PipelineContext{
@@ -317,12 +324,14 @@ func TestContainerControlStep_StartMissingWorkspace(t *testing.T) {
 		containers: make(map[string]string),
 		available:  true,
 	}
+	app := newMockApp()
+	app.services["ratchet-container-manager"] = cm
 
 	step := &ContainerControlStep{
-		name:         "cc",
-		action:       "start",
-		containerMgr: cm,
-		tmpl:         module.NewTemplateEngine(),
+		name:   "cc",
+		action: "start",
+		app:    app,
+		tmpl:   module.NewTemplateEngine(),
 	}
 
 	pc := &module.PipelineContext{
@@ -343,12 +352,14 @@ func TestContainerControlStep_StartMissingImage(t *testing.T) {
 		containers: make(map[string]string),
 		available:  true,
 	}
+	app := newMockApp()
+	app.services["ratchet-container-manager"] = cm
 
 	step := &ContainerControlStep{
-		name:         "cc",
-		action:       "start",
-		containerMgr: cm,
-		tmpl:         module.NewTemplateEngine(),
+		name:   "cc",
+		action: "start",
+		app:    app,
+		tmpl:   module.NewTemplateEngine(),
 	}
 
 	pc := &module.PipelineContext{
@@ -414,9 +425,10 @@ func TestContainerControlFactory_WithContainerManager(t *testing.T) {
 		t.Fatalf("factory: %v", err)
 	}
 	step := stepRaw.(*ContainerControlStep)
-	if step.containerMgr != cm {
-		t.Error("expected container manager to be set from service registry")
+	if step.app == nil {
+		t.Error("expected app to be set from factory")
 	}
+	// ContainerManager is looked up lazily in Execute(), not stored on struct
 }
 
 // ---------------------------------------------------------------------------
@@ -430,9 +442,6 @@ var _ tools.ContainerExecer = (*ContainerManager)(nil)
 // ---------------------------------------------------------------------------
 
 func TestAgentExecuteStepFactory_ContainerManagerLookup(t *testing.T) {
-	db := openTestDB(t)
-	initTranscriptsTable(t, db)
-
 	mp := &mockProvider{responses: []string{"Done."}}
 	providerMod := &AIProviderModule{name: "ratchet-ai", provider: mp}
 
@@ -454,7 +463,8 @@ func TestAgentExecuteStepFactory_ContainerManagerLookup(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *AgentExecuteStep, got %T", stepRaw)
 	}
-	if step.containerMgr != cm {
-		t.Error("expected containerMgr to be set from service registry")
+	if step.app == nil {
+		t.Error("expected app to be set from factory")
 	}
+	// ContainerManager is looked up lazily in Execute(), not stored on struct
 }

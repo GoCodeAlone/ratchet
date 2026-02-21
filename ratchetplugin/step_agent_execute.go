@@ -20,10 +20,6 @@ type AgentExecuteStep struct {
 	providerService string
 	app             modular.Application
 	tmpl            *module.TemplateEngine
-	toolRegistry    *ToolRegistry
-	guard           *SecretGuard
-	recorder        *TranscriptRecorder
-	containerMgr    *ContainerManager
 }
 
 func (s *AgentExecuteStep) Name() string { return s.name }
@@ -50,13 +46,46 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 	}
 	aiProvider := providerMod.Provider()
 
-	// Extract agent and task data
-	systemPrompt := extractString(pc.Current, "system_prompt", "You are a helpful AI agent.")
-	taskDescription := extractString(pc.Current, "description", extractString(pc.Current, "task", "Complete the assigned task."))
-	agentName := extractString(pc.Current, "agent_name", extractString(pc.Current, "name", "agent"))
-	agentID := extractString(pc.Current, "agent_id", agentName)
-	taskID := extractString(pc.Current, "task_id", extractString(pc.Current, "id", ""))
-	projectID := extractString(pc.Current, "project_id", "")
+	// Lazy-lookup services from the registry. These are registered by wiring hooks
+	// which run AFTER step factories, so they may not be available at factory time.
+	var toolRegistry *ToolRegistry
+	if svc, ok := s.app.SvcRegistry()["ratchet-tool-registry"]; ok {
+		toolRegistry, _ = svc.(*ToolRegistry)
+	}
+	var guard *SecretGuard
+	if svc, ok := s.app.SvcRegistry()["ratchet-secret-guard"]; ok {
+		guard, _ = svc.(*SecretGuard)
+	}
+	var recorder *TranscriptRecorder
+	if svc, ok := s.app.SvcRegistry()["ratchet-transcript-recorder"]; ok {
+		recorder, _ = svc.(*TranscriptRecorder)
+	}
+	var containerMgr *ContainerManager
+	if svc, ok := s.app.SvcRegistry()["ratchet-container-manager"]; ok {
+		containerMgr, _ = svc.(*ContainerManager)
+	}
+
+	// Extract agent and task data from pc.Current.
+	// The find-pending-task db_query step returns data under a "row" key,
+	// so we also check pc.Current["row"] for nested data.
+	data := pc.Current
+	if row, ok := data["row"].(map[string]any); ok {
+		// Merge row fields into a flat lookup map (row fields take precedence)
+		flat := make(map[string]any, len(data)+len(row))
+		for k, v := range data {
+			flat[k] = v
+		}
+		for k, v := range row {
+			flat[k] = v
+		}
+		data = flat
+	}
+	systemPrompt := extractString(data, "system_prompt", "You are a helpful AI agent.")
+	taskDescription := extractString(data, "description", extractString(data, "task", "Complete the assigned task."))
+	agentName := extractString(data, "agent_name", extractString(data, "name", "agent"))
+	agentID := extractString(data, "agent_id", agentName)
+	taskID := extractString(data, "task_id", extractString(data, "id", ""))
+	projectID := extractString(data, "project_id", "")
 
 	// Build enriched context with workspace/container info
 	toolCtx := ctx
@@ -79,8 +108,8 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		}
 
 		// If container manager is available, inject it as ContainerExecer
-		if s.containerMgr != nil && s.containerMgr.IsAvailable() {
-			toolCtx = context.WithValue(toolCtx, tools.ContextKeyContainerID, tools.ContainerExecer(s.containerMgr))
+		if containerMgr != nil && containerMgr.IsAvailable() {
+			toolCtx = context.WithValue(toolCtx, tools.ContextKeyContainerID, tools.ContainerExecer(containerMgr))
 		}
 	}
 
@@ -92,14 +121,14 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 	// Get tool definitions
 	var toolDefs []provider.ToolDef
-	if s.toolRegistry != nil {
-		toolDefs = s.toolRegistry.AllDefs()
+	if toolRegistry != nil {
+		toolDefs = toolRegistry.AllDefs()
 	}
 
 	// Record system prompt and user message
-	if s.recorder != nil {
+	if recorder != nil {
 		for _, msg := range messages {
-			_ = s.recorder.Record(ctx, TranscriptEntry{
+			_ = recorder.Record(ctx, TranscriptEntry{
 				ID:        uuid.New().String(),
 				AgentID:   agentID,
 				TaskID:    taskID,
@@ -118,9 +147,9 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		iterCount++
 
 		// Redact secrets from messages before sending to LLM
-		if s.guard != nil {
+		if guard != nil {
 			for i := range messages {
-				s.guard.CheckAndRedact(&messages[i])
+				guard.CheckAndRedact(&messages[i])
 			}
 		}
 
@@ -132,8 +161,8 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		finalContent = resp.Content
 
 		// Record assistant response
-		if s.recorder != nil {
-			_ = s.recorder.Record(ctx, TranscriptEntry{
+		if recorder != nil {
+			_ = recorder.Record(ctx, TranscriptEntry{
 				ID:        uuid.New().String(),
 				AgentID:   agentID,
 				TaskID:    taskID,
@@ -158,8 +187,8 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 		for _, tc := range resp.ToolCalls {
 			var resultStr string
-			if s.toolRegistry != nil {
-				result, execErr := s.toolRegistry.Execute(toolCtx, tc.Name, tc.Arguments)
+			if toolRegistry != nil {
+				result, execErr := toolRegistry.Execute(toolCtx, tc.Name, tc.Arguments)
 				if execErr != nil {
 					resultStr = fmt.Sprintf("Error: %v", execErr)
 				} else {
@@ -171,8 +200,8 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 			}
 
 			// Redact tool results
-			if s.guard != nil {
-				resultStr = s.guard.Redact(resultStr)
+			if guard != nil {
+				resultStr = guard.Redact(resultStr)
 			}
 
 			messages = append(messages, provider.Message{
@@ -182,8 +211,8 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 			})
 
 			// Record tool result
-			if s.recorder != nil {
-				_ = s.recorder.Record(ctx, TranscriptEntry{
+			if recorder != nil {
+				_ = recorder.Record(ctx, TranscriptEntry{
 					ID:         uuid.New().String(),
 					AgentID:    agentID,
 					TaskID:     taskID,
@@ -235,42 +264,12 @@ func newAgentExecuteStepFactory() plugin.StepFactory {
 			providerService = "ratchet-ai"
 		}
 
-		step := &AgentExecuteStep{
+		return &AgentExecuteStep{
 			name:            name,
 			maxIterations:   maxIterations,
 			providerService: providerService,
 			app:             app,
 			tmpl:            module.NewTemplateEngine(),
-		}
-
-		// Look up ToolRegistry from service registry
-		if svc, ok := app.SvcRegistry()["ratchet-tool-registry"]; ok {
-			if tr, ok := svc.(*ToolRegistry); ok {
-				step.toolRegistry = tr
-			}
-		}
-
-		// Look up SecretGuard from service registry
-		if svc, ok := app.SvcRegistry()["ratchet-secret-guard"]; ok {
-			if sg, ok := svc.(*SecretGuard); ok {
-				step.guard = sg
-			}
-		}
-
-		// Look up TranscriptRecorder from service registry
-		if svc, ok := app.SvcRegistry()["ratchet-transcript-recorder"]; ok {
-			if rec, ok := svc.(*TranscriptRecorder); ok {
-				step.recorder = rec
-			}
-		}
-
-		// Look up ContainerManager from service registry
-		if svc, ok := app.SvcRegistry()["ratchet-container-manager"]; ok {
-			if cm, ok := svc.(*ContainerManager); ok {
-				step.containerMgr = cm
-			}
-		}
-
-		return step, nil
+		}, nil
 	}
 }

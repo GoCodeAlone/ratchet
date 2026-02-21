@@ -368,7 +368,7 @@ workflows:
               type: step.db_query
               config:
                 database: ratchet-db
-                query: "SELECT id, title, description, status, priority, assigned_to, team_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks ORDER BY priority DESC, created_at ASC"
+                query: "SELECT id, title, description, status, priority, assigned_to, team_id, project_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks ORDER BY priority DESC, created_at ASC"
                 mode: list
             - name: respond
               type: step.json_response
@@ -403,7 +403,7 @@ workflows:
               type: step.db_exec
               config:
                 database: ratchet-db
-                query: "INSERT INTO tasks (id, title, description, status, priority, assigned_to, team_id, parent_id, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, '', ?, ?)"
+                query: "INSERT INTO tasks (id, title, description, status, priority, assigned_to, team_id, project_id, parent_id, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, '', ?, ?)"
                 params:
                   - "{{ .steps.prepare.id }}"
                   - "{{index .steps \"parse-request\" \"body\" \"title\"}}"
@@ -411,6 +411,7 @@ workflows:
                   - "{{ default 1 (index .steps \"parse-request\" \"body\" \"priority\") }}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"assigned_to\") }}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"team_id\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"project_id\") }}"
                   - "{{ .steps.prepare.now }}"
                   - "{{ .steps.prepare.now }}"
             - name: respond
@@ -438,7 +439,7 @@ workflows:
               type: step.db_query
               config:
                 database: ratchet-db
-                query: "SELECT id, title, description, status, priority, assigned_to, team_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks WHERE id = ?"
+                query: "SELECT id, title, description, status, priority, assigned_to, team_id, project_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks WHERE id = ?"
                 params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
                 mode: single
             - name: check-found
@@ -1217,7 +1218,7 @@ pipelines:
         type: step.db_query
         config:
           database: ratchet-db
-          query: "SELECT t.id, t.title, t.description, t.priority, a.id as agent_id, a.name as agent_name, a.system_prompt, a.provider FROM tasks t JOIN agents a ON t.assigned_to = a.id WHERE t.status = 'pending' AND a.status = 'active' ORDER BY t.priority DESC, t.created_at ASC LIMIT 1"
+          query: "SELECT t.id, t.title, t.description, t.priority, t.project_id, a.id as agent_id, a.name as agent_name, a.system_prompt, a.provider FROM tasks t JOIN agents a ON t.assigned_to = a.id WHERE t.status = 'pending' AND a.status = 'active' ORDER BY t.priority DESC, t.created_at ASC LIMIT 1"
           mode: single
 
       - name: check-pending-task
@@ -1233,7 +1234,7 @@ pipelines:
         config:
           database: ratchet-db
           query: "UPDATE tasks SET status = 'in_progress', started_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
-          params: ["{{ .steps.find-pending-task.row.id }}"]
+          params: ["{{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}}"]
 
       - name: execute-agent
         type: step.agent_execute
@@ -1247,13 +1248,13 @@ pipelines:
           database: ratchet-db
           query: "UPDATE tasks SET status = 'completed', result = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
           params:
-            - "{{ .steps.execute-agent.result }}"
-            - "{{ .steps.find-pending-task.row.id }}"
+            - "{{index (index .steps \"execute-agent\") \"result\"}}"
+            - "{{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}}"
 
       - name: log-completion
         type: step.log
         config:
-          message: "Agent tick complete: task {{ .steps.find-pending-task.row.id }} processed"
+          message: "Agent tick complete: task {{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}} processed"
           level: info
 
       - name: done

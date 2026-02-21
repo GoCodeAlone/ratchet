@@ -12,10 +12,10 @@ import (
 // ContainerControlStep manages container lifecycle as a pipeline step.
 // Actions: "start", "stop", "remove", "status".
 type ContainerControlStep struct {
-	name         string
-	action       string
-	containerMgr *ContainerManager
-	tmpl         *module.TemplateEngine
+	name   string
+	action string
+	app    modular.Application
+	tmpl   *module.TemplateEngine
 }
 
 func (s *ContainerControlStep) Name() string { return s.name }
@@ -26,7 +26,13 @@ func (s *ContainerControlStep) Execute(ctx context.Context, pc *module.PipelineC
 		return nil, fmt.Errorf("container_control step %q: project_id is required", s.name)
 	}
 
-	if s.containerMgr == nil || !s.containerMgr.IsAvailable() {
+	// Lazy-lookup ContainerManager (registered by wiring hook after step factories)
+	var containerMgr *ContainerManager
+	if svc, ok := s.app.SvcRegistry()["ratchet-container-manager"]; ok {
+		containerMgr, _ = svc.(*ContainerManager)
+	}
+
+	if containerMgr == nil || !containerMgr.IsAvailable() {
 		return &module.StepResult{
 			Output: map[string]any{
 				"status":  "unavailable",
@@ -47,7 +53,7 @@ func (s *ContainerControlStep) Execute(ctx context.Context, pc *module.PipelineC
 		}
 
 		spec := WorkspaceSpec{Image: imageStr}
-		cid, err := s.containerMgr.EnsureContainer(ctx, projectID, workspacePath, spec)
+		cid, err := containerMgr.EnsureContainer(ctx, projectID, workspacePath, spec)
 		if err != nil {
 			return nil, fmt.Errorf("container_control step %q: %w", s.name, err)
 		}
@@ -60,7 +66,7 @@ func (s *ContainerControlStep) Execute(ctx context.Context, pc *module.PipelineC
 		}, nil
 
 	case "stop":
-		if err := s.containerMgr.StopContainer(ctx, projectID); err != nil {
+		if err := containerMgr.StopContainer(ctx, projectID); err != nil {
 			return nil, fmt.Errorf("container_control step %q: %w", s.name, err)
 		}
 		return &module.StepResult{
@@ -71,7 +77,7 @@ func (s *ContainerControlStep) Execute(ctx context.Context, pc *module.PipelineC
 		}, nil
 
 	case "remove":
-		if err := s.containerMgr.RemoveContainer(ctx, projectID); err != nil {
+		if err := containerMgr.RemoveContainer(ctx, projectID); err != nil {
 			return nil, fmt.Errorf("container_control step %q: %w", s.name, err)
 		}
 		return &module.StepResult{
@@ -82,7 +88,7 @@ func (s *ContainerControlStep) Execute(ctx context.Context, pc *module.PipelineC
 		}, nil
 
 	case "status":
-		status, err := s.containerMgr.GetContainerStatus(ctx, projectID)
+		status, err := containerMgr.GetContainerStatus(ctx, projectID)
 		if err != nil {
 			return nil, fmt.Errorf("container_control step %q: %w", s.name, err)
 		}
@@ -106,19 +112,11 @@ func newContainerControlFactory() plugin.StepFactory {
 			action = "status"
 		}
 
-		step := &ContainerControlStep{
+		return &ContainerControlStep{
 			name:   name,
 			action: action,
+			app:    app,
 			tmpl:   module.NewTemplateEngine(),
-		}
-
-		// Look up ContainerManager from service registry
-		if svc, ok := app.SvcRegistry()["ratchet-container-manager"]; ok {
-			if cm, ok := svc.(*ContainerManager); ok {
-				step.containerMgr = cm
-			}
-		}
-
-		return step, nil
+		}, nil
 	}
 }
