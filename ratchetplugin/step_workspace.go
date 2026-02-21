@@ -13,16 +13,32 @@ import (
 
 // WorkspaceInitStep creates a project workspace directory.
 type WorkspaceInitStep struct {
-	name    string
-	dataDir string
-	app     modular.Application
-	tmpl    *module.TemplateEngine
+	name          string
+	dataDir       string
+	projectIDExpr string // template expression for project ID (e.g. "{{ .steps.prepare.id }}")
+	app           modular.Application
+	tmpl          *module.TemplateEngine
 }
 
 func (s *WorkspaceInitStep) Name() string { return s.name }
 
 func (s *WorkspaceInitStep) Execute(ctx context.Context, pc *module.PipelineContext) (*module.StepResult, error) {
-	projectID := extractString(pc.Current, "project_id", "")
+	var projectID string
+
+	// Try template expression first (from config)
+	if s.projectIDExpr != "" {
+		if resolved, err := s.tmpl.Resolve(s.projectIDExpr, pc); err == nil {
+			projectID = fmt.Sprintf("%v", resolved)
+		}
+	}
+
+	// Fall back to pc.Current fields
+	if projectID == "" {
+		projectID = extractString(pc.Current, "project_id", "")
+	}
+	if projectID == "" {
+		projectID = extractString(pc.Current, "id", "")
+	}
 	if projectID == "" {
 		return nil, fmt.Errorf("workspace_init step %q: project_id is required", s.name)
 	}
@@ -61,11 +77,13 @@ func newWorkspaceInitFactory() plugin.StepFactory {
 		if dataDir == "" {
 			dataDir = "./data"
 		}
+		projectIDExpr, _ := cfg["project_id"].(string)
 		return &WorkspaceInitStep{
-			name:    name,
-			dataDir: dataDir,
-			app:     app,
-			tmpl:    module.NewTemplateEngine(),
+			name:          name,
+			dataDir:       dataDir,
+			projectIDExpr: projectIDExpr,
+			app:           app,
+			tmpl:          module.NewTemplateEngine(),
 		}, nil
 	}
 }

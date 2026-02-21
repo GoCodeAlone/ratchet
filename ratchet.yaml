@@ -711,6 +711,7 @@ workflows:
               type: step.workspace_init
               config:
                 data_dir: "./data"
+                project_id: "{{ .steps.prepare.id }}"
             - name: respond
               type: step.json_response
               config:
@@ -879,6 +880,47 @@ workflows:
               config:
                 status: 200
                 body_from: "steps.list-messages.rows"
+
+      # Send a message between agents
+      - method: POST
+        path: "/api/messages"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [to, content]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO messages (id, type, from_agent, to_agent, subject, content, created_at) VALUES (?, 'direct', ?, ?, ?, ?, datetime('now'))"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"from\") }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"to\"}}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"subject\") }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"content\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  sent: true
 
       # ============================================================
       # SERVER INFO ROUTE (auth required — used by Settings page)
