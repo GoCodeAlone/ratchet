@@ -118,7 +118,7 @@ func initTranscriptsTable(t *testing.T, db *sql.DB) {
 
 func createAllTables(t *testing.T, db *sql.DB) {
 	t.Helper()
-	for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable} {
+	for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable, createLLMProvidersTable} {
 		if _, err := db.Exec(ddl); err != nil {
 			t.Fatalf("create table: %v", err)
 		}
@@ -993,7 +993,7 @@ func TestPlugin_StepFactories(t *testing.T) {
 	p := New()
 	factories := p.StepFactories()
 
-	expected := []string{"step.agent_execute", "step.workspace_init", "step.container_control"}
+	expected := []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test"}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {
 			t.Errorf("missing step factory: %s", name)
@@ -1008,14 +1008,15 @@ func TestPlugin_WiringHooks(t *testing.T) {
 	p := New()
 	hooks := p.WiringHooks()
 
-	if len(hooks) != 6 {
-		t.Fatalf("expected 6 wiring hooks, got %d", len(hooks))
+	if len(hooks) != 7 {
+		t.Fatalf("expected 7 wiring hooks, got %d", len(hooks))
 	}
 
 	expectedNames := map[string]bool{
 		"ratchet.db_init":             false,
 		"ratchet.auth_token":          false,
 		"ratchet.secrets_guard":       false,
+		"ratchet.provider_registry":   false,
 		"ratchet.tool_registry":       false,
 		"ratchet.container_manager":   false,
 		"ratchet.transcript_recorder": false,
@@ -1032,11 +1033,12 @@ func TestPlugin_WiringHooks(t *testing.T) {
 		}
 	}
 
-	// Verify priorities: db_init(100) > auth_token(90) > secrets_guard(85) > tool_registry(80) > transcript_recorder(75)
+	// Verify priorities: db_init(100) > auth_token(90) > secrets_guard(85) > provider_registry(83) > tool_registry(80) > transcript_recorder(75)
 	expectedPriorities := map[string]int{
 		"ratchet.db_init":             100,
 		"ratchet.auth_token":          90,
 		"ratchet.secrets_guard":       85,
+		"ratchet.provider_registry":   83,
 		"ratchet.tool_registry":       80,
 		"ratchet.transcript_recorder": 75,
 	}

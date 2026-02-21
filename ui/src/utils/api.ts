@@ -1,4 +1,4 @@
-import type { Project, TranscriptEntry, AgentInfo, Task, ProjectRepo, ContainerStatus, WorkspaceSpec } from '../types';
+import type { Project, TranscriptEntry, AgentInfo, Task, ProjectRepo, ContainerStatus, WorkspaceSpec, LLMProvider, ProviderTestResult } from '../types';
 
 const API_BASE = '/api';
 
@@ -52,6 +52,15 @@ export async function apiDelete<T>(path: string): Promise<T> {
   return handleResponse<T>(res);
 }
 
+export async function apiPut<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return handleResponse<T>(res);
+}
+
 // Projects
 export const fetchProjects = () => apiGet<Project[]>('/projects');
 export const createProject = (data: { name: string; description?: string; workspace_spec?: WorkspaceSpec }) => apiPost<Project>('/projects', data);
@@ -61,7 +70,7 @@ export const fetchProjectTasks = (id: string) => apiGet<Task[]>(`/projects/${id}
 export const fetchProjectTranscripts = (id: string) => apiGet<TranscriptEntry[]>(`/projects/${id}/transcripts`);
 
 // Agents CRUD
-export const createAgent = (data: { name: string; role?: string; system_prompt?: string; team_id?: string }) => apiPost<AgentInfo>('/agents', data);
+export const createAgent = (data: { name: string; role?: string; system_prompt?: string; team_id?: string; provider?: string; model?: string }) => apiPost<AgentInfo>('/agents', data);
 export const deleteAgent = (id: string) => apiDelete<void>(`/agents/${id}`);
 export const updateAgent = (id: string, data: Partial<AgentInfo>) => apiPatch<AgentInfo>(`/agents/${id}`, data);
 
@@ -78,3 +87,17 @@ export const getContainerStatus = (projectId: string) => apiGet<ContainerStatus>
 // Transcripts
 export const fetchTranscripts = () => apiGet<TranscriptEntry[]>('/transcripts');
 export const fetchAgentTranscripts = (agentId: string) => apiGet<TranscriptEntry[]>(`/agents/${agentId}/transcripts`);
+
+// Providers
+export const fetchProviders = () => apiGet<LLMProvider[]>('/providers');
+export const createProvider = (data: Partial<LLMProvider>) => apiPost<LLMProvider>('/providers', data);
+export const fetchProvider = (alias: string) => apiGet<LLMProvider>(`/providers/${alias}`);
+export const updateProvider = (alias: string, data: Partial<LLMProvider>) => apiPatch<LLMProvider>(`/providers/${alias}`, data);
+export const deleteProvider = (alias: string) => apiDelete<void>(`/providers/${alias}`);
+export const testProvider = (alias: string) => apiPost<ProviderTestResult>(`/providers/${alias}/test`);
+export const setDefaultProvider = (alias: string) => apiPost<void>(`/providers/${alias}/default`);
+
+// Secrets
+export const listSecrets = () => apiGet<string[]>('/secrets');
+export const storeSecret = (key: string, value: string) => apiPut<void>(`/secrets/${key}`, { value });
+export const deleteSecret = (key: string) => apiDelete<void>(`/secrets/${key}`);

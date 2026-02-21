@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { colors, baseStyles } from '../theme';
 import { apiGet } from '../utils/api';
+import ProviderList from './ProviderList';
 
 interface ServerInfo {
   version: string;
@@ -109,6 +110,9 @@ export default function Settings() {
           </div>
         )}
       </div>
+
+      {/* AI Providers */}
+      <ProviderList />
 
       {/* Connection */}
       <div style={{ ...baseStyles.card, marginBottom: '16px' }}>

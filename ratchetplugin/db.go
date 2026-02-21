@@ -125,6 +125,22 @@ CREATE TABLE IF NOT EXISTS workspace_containers (
     updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );`
 
+const createLLMProvidersTable = `
+CREATE TABLE IF NOT EXISTS llm_providers (
+    id TEXT PRIMARY KEY,
+    alias TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    base_url TEXT NOT NULL DEFAULT '',
+    secret_name TEXT NOT NULL DEFAULT '',
+    max_tokens INTEGER NOT NULL DEFAULT 0,
+    settings TEXT NOT NULL DEFAULT '{}',
+    is_default INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'unchecked',
+    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);`
+
 // dbInitHook creates a WiringHook that initialises the ratchet database tables
 // and seeds agents from the YAML config.
 func dbInitHook() plugin.WiringHook {
@@ -162,10 +178,17 @@ func dbInitHook() plugin.WiringHook {
 			db.SetMaxOpenConns(1)
 
 			// Create tables
-			for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable, createProjectReposTable, createWorkspaceContainersTable} {
+			for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable, createProjectReposTable, createWorkspaceContainersTable, createLLMProvidersTable} {
 				if _, err := db.Exec(ddl); err != nil {
 					return fmt.Errorf("ratchet.db_init: create table: %w", err)
 				}
+			}
+
+			// Seed default mock provider if none exist
+			var providerCount int
+			_ = db.QueryRow("SELECT COUNT(*) FROM llm_providers").Scan(&providerCount)
+			if providerCount == 0 {
+				_, _ = db.Exec(`INSERT OR IGNORE INTO llm_providers (id, alias, type, model, is_default, status) VALUES ('mock-default', 'mock', 'mock', '', 1, 'active')`)
 			}
 
 			// Add project_id column to tasks if missing (for existing databases)

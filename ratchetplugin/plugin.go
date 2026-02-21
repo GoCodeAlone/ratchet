@@ -5,6 +5,7 @@ package ratchetplugin
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 	"strings"
 
@@ -42,8 +43,8 @@ func New() *RatchetPlugin {
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control"},
-				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test"},
+				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager", "ratchet.provider_registry"},
 			},
 		},
 	}
@@ -71,6 +72,8 @@ func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 		"step.agent_execute":     newAgentExecuteStepFactory(),
 		"step.workspace_init":    newWorkspaceInitFactory(),
 		"step.container_control": newContainerControlFactory(),
+		"step.secret_manage":     newSecretManageFactory(),
+		"step.provider_test":     newProviderTestFactory(),
 	}
 }
 
@@ -80,6 +83,7 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 		dbInitHook(),
 		authTokenHook(),
 		secretsGuardHook(),
+		providerRegistryHook(),
 		toolRegistryHook(),
 		containerManagerHook(),
 		transcriptRecorderHook(),
@@ -92,32 +96,76 @@ func (p *RatchetPlugin) ModuleSchemas() []*schema.ModuleSchema {
 }
 
 // secretsGuardHook creates a SecretGuard and registers it in the service registry.
+// It uses a FileProvider for persistent secret storage and also loads RATCHET_*
+// environment variables for backward compatibility.
 func secretsGuardHook() plugin.WiringHook {
 	return plugin.WiringHook{
 		Name:     "ratchet.secrets_guard",
 		Priority: 85,
 		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
-			// Create an EnvProvider with RATCHET_ prefix
-			envProvider := secrets.NewEnvProvider("RATCHET_")
-			guard := NewSecretGuard(envProvider)
+			// Use FileProvider for persistent secret storage
+			secretsDir := os.Getenv("RATCHET_SECRETS_DIR")
+			if secretsDir == "" {
+				secretsDir = "data/secrets"
+			}
+			if err := os.MkdirAll(secretsDir, 0700); err != nil {
+				return fmt.Errorf("ratchet.secrets_guard: create secrets dir: %w", err)
+			}
+			fileProvider := secrets.NewFileProvider(secretsDir)
+			guard := NewSecretGuard(fileProvider)
 
-			// Load all RATCHET_* environment variables as secrets
 			ctx := context.Background()
-			var secretNames []string
+
+			// Load all file-based secrets
+			_ = guard.LoadAllSecrets(ctx)
+
+			// Backward compat: also load RATCHET_* env vars into SecretGuard
+			// (These are loaded for redaction only; the env provider is not the primary store.)
+			envProvider := secrets.NewEnvProvider("RATCHET_")
 			for _, env := range os.Environ() {
 				if strings.HasPrefix(env, "RATCHET_") {
 					parts := strings.SplitN(env, "=", 2)
-					// Strip prefix for the secret name
 					name := strings.TrimPrefix(parts[0], "RATCHET_")
-					secretNames = append(secretNames, name)
+					if val, err := envProvider.Get(ctx, name); err == nil && val != "" {
+						guard.AddKnownSecret(name, val)
+					}
 				}
-			}
-			if len(secretNames) > 0 {
-				_ = guard.LoadSecrets(ctx, secretNames)
 			}
 
 			// Register in service registry
 			app.RegisterService("ratchet-secret-guard", guard)
+			return nil
+		},
+	}
+}
+
+// providerRegistryHook creates a ProviderRegistry and registers it in the service registry.
+func providerRegistryHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.provider_registry",
+		Priority: 83,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			// Get DB
+			var db *sql.DB
+			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok {
+					db = dbp.DB()
+				}
+			}
+			if db == nil {
+				return nil // no DB, skip
+			}
+
+			// Get secrets provider from SecretGuard
+			var sp secrets.Provider
+			if svc, ok := app.SvcRegistry()["ratchet-secret-guard"]; ok {
+				if guard, ok := svc.(*SecretGuard); ok {
+					sp = guard.Provider()
+				}
+			}
+
+			registry := NewProviderRegistry(db, sp)
+			app.RegisterService("ratchet-provider-registry", registry)
 			return nil
 		},
 	}

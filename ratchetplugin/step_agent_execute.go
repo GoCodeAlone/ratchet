@@ -29,22 +29,54 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		return nil, fmt.Errorf("agent_execute step %q: no application context", s.name)
 	}
 
-	// Resolve provider service name
-	providerSvcRaw, err := s.tmpl.Resolve(s.providerService, pc)
-	if err != nil {
-		return nil, fmt.Errorf("agent_execute step %q: resolve provider_service: %w", s.name, err)
-	}
-	providerSvcName := fmt.Sprintf("%v", providerSvcRaw)
+	// Resolve AI provider via multiple paths:
+	// 1. Try ProviderRegistry (DB-backed providers) if available
+	// 2. Fall back to AIProviderModule (YAML-configured) lookup
+	var aiProvider provider.Provider
 
-	svc, ok := s.app.SvcRegistry()[providerSvcName]
-	if !ok {
-		return nil, fmt.Errorf("agent_execute step %q: provider service %q not found", s.name, providerSvcName)
+	// Extract provider alias from pipeline data (set by agent's provider column)
+	// We do this after flattening below, but we peek at data here for the alias.
+	peekData := pc.Current
+	if row, ok := peekData["row"].(map[string]any); ok {
+		for k, v := range row {
+			peekData[k] = v
+		}
 	}
-	providerMod, ok := svc.(*AIProviderModule)
-	if !ok {
-		return nil, fmt.Errorf("agent_execute step %q: service %q is not an AIProviderModule", s.name, providerSvcName)
+	providerAlias := extractString(peekData, "provider", "")
+
+	// Path 1: Try ProviderRegistry
+	if regSvc, ok := s.app.SvcRegistry()["ratchet-provider-registry"]; ok {
+		if registry, ok := regSvc.(*ProviderRegistry); ok {
+			var regErr error
+			if providerAlias != "" {
+				aiProvider, regErr = registry.GetByAlias(ctx, providerAlias)
+			} else {
+				aiProvider, regErr = registry.GetDefault(ctx)
+			}
+			if regErr != nil {
+				aiProvider = nil // fall through to path 2
+			}
+		}
 	}
-	aiProvider := providerMod.Provider()
+
+	// Path 2: Fall back to AIProviderModule lookup
+	if aiProvider == nil {
+		providerSvcRaw, err := s.tmpl.Resolve(s.providerService, pc)
+		if err != nil {
+			return nil, fmt.Errorf("agent_execute step %q: resolve provider_service: %w", s.name, err)
+		}
+		providerSvcName := fmt.Sprintf("%v", providerSvcRaw)
+
+		svc, ok := s.app.SvcRegistry()[providerSvcName]
+		if !ok {
+			return nil, fmt.Errorf("agent_execute step %q: provider service %q not found", s.name, providerSvcName)
+		}
+		providerMod, ok := svc.(*AIProviderModule)
+		if !ok {
+			return nil, fmt.Errorf("agent_execute step %q: service %q is not an AIProviderModule", s.name, providerSvcName)
+		}
+		aiProvider = providerMod.Provider()
+	}
 
 	// Lazy-lookup services from the registry. These are registered by wiring hooks
 	// which run AFTER step factories, so they may not be available at factory time.

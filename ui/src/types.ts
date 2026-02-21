@@ -115,3 +115,26 @@ export interface ContainerStatus {
   created_at: string;
   updated_at: string;
 }
+
+export type ProviderType = 'anthropic' | 'openai' | 'copilot' | 'mock';
+export type ProviderStatus = 'unchecked' | 'active' | 'error';
+
+export interface LLMProvider {
+  id: string;
+  alias: string;
+  type: ProviderType;
+  model: string;
+  api_base_url: string;
+  secret_name: string;
+  settings: string;
+  is_default: number;
+  status: ProviderStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderTestResult {
+  success: boolean;
+  message: string;
+  latency_ms?: number;
+}

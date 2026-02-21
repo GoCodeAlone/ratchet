@@ -1,5 +1,6 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { useAgentStore } from '../store/agentStore';
+import { useProviderStore } from '../store/providerStore';
 import { colors, statusColors, baseStyles } from '../theme';
 import { AgentInfo, AgentStatus, TranscriptEntry } from '../types';
 import { createAgent, deleteAgent, fetchAgentTranscripts } from '../utils/api';
@@ -34,13 +35,19 @@ function StatusBadge({ status }: { status: AgentStatus }) {
   );
 }
 
-function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (data: { name: string; role?: string; system_prompt?: string; team_id?: string }) => Promise<void> }) {
+function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (data: { name: string; role?: string; system_prompt?: string; team_id?: string; provider?: string; model?: string }) => Promise<void> }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [teamId, setTeamId] = useState('');
+  const [selectedProvider, setSelectedProvider] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { providers, fetchProviders } = useProviderStore();
+
+  useEffect(() => {
+    fetchProviders();
+  }, [fetchProviders]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -48,7 +55,15 @@ function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
     setLoading(true);
     setError('');
     try {
-      await onSubmit({ name: name.trim(), role: role.trim() || undefined, system_prompt: systemPrompt.trim() || undefined, team_id: teamId.trim() || undefined });
+      const chosen = providers.find((p) => p.alias === selectedProvider);
+      await onSubmit({
+        name: name.trim(),
+        role: role.trim() || undefined,
+        system_prompt: systemPrompt.trim() || undefined,
+        team_id: teamId.trim() || undefined,
+        provider: selectedProvider || undefined,
+        model: chosen?.model || undefined,
+      });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create agent');
@@ -78,6 +93,21 @@ function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
           <div style={{ marginBottom: '14px' }}>
             <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Team ID</label>
             <input type="text" value={teamId} onChange={(e) => setTeamId(e.target.value)} placeholder="Optional team assignment" style={baseStyles.input} />
+          </div>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Provider</label>
+            <select
+              value={selectedProvider}
+              onChange={(e) => setSelectedProvider(e.target.value)}
+              style={{ ...baseStyles.input, cursor: 'pointer' }}
+            >
+              <option value="">(Default)</option>
+              {providers.map((p) => (
+                <option key={p.alias} value={p.alias}>
+                  {p.alias} ({p.type} / {p.model})
+                </option>
+              ))}
+            </select>
           </div>
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>System Prompt</label>
@@ -145,6 +175,10 @@ function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () =>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+        <div>
+          <div style={{ color: colors.subtext0, marginBottom: '3px' }}>Provider</div>
+          <div style={{ color: colors.text, fontFamily: 'monospace' }}>{agent.provider || 'mock'}</div>
+        </div>
         <div>
           <div style={{ color: colors.subtext0, marginBottom: '3px' }}>Model</div>
           <div style={{ color: colors.text, fontFamily: 'monospace' }}>{agent.model}</div>
@@ -236,7 +270,7 @@ export default function AgentList() {
     }
   }
 
-  async function handleCreate(data: { name: string; role?: string; system_prompt?: string; team_id?: string }) {
+  async function handleCreate(data: { name: string; role?: string; system_prompt?: string; team_id?: string; provider?: string; model?: string }) {
     await createAgent(data);
     await fetchAgents();
   }
@@ -323,6 +357,7 @@ export default function AgentList() {
               <tr style={{ backgroundColor: colors.mantle }}>
                 <th style={baseStyles.th}>Name</th>
                 <th style={baseStyles.th}>Role</th>
+                <th style={baseStyles.th}>Provider</th>
                 <th style={baseStyles.th}>Status</th>
                 <th style={baseStyles.th}>Current Task</th>
                 <th style={baseStyles.th}>Team</th>
@@ -360,6 +395,9 @@ export default function AgentList() {
                   </td>
                   <td style={{ ...baseStyles.td, color: colors.subtext0 }}>
                     {agent.role}
+                  </td>
+                  <td style={{ ...baseStyles.td, color: colors.subtext0, fontFamily: 'monospace', fontSize: '12px' }}>
+                    {agent.provider || 'mock'}
                   </td>
                   <td style={baseStyles.td}>
                     <StatusBadge status={agent.status} />
