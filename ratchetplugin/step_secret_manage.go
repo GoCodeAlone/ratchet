@@ -13,12 +13,12 @@ import (
 
 // SecretManageStep manages secrets (set, delete, list) as a pipeline step.
 type SecretManageStep struct {
-	name     string
-	action   string
-	keyExpr  string // template expression for the secret key
-	valExpr  string // template expression for the secret value
-	app      modular.Application
-	tmpl     *module.TemplateEngine
+	name    string
+	action  string
+	keyExpr string // template expression for the secret key
+	valExpr string // template expression for the secret value
+	app     modular.Application
+	tmpl    *module.TemplateEngine
 }
 
 func (s *SecretManageStep) Name() string { return s.name }

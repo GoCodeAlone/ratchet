@@ -5,7 +5,6 @@ package ratchetplugin
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"os"
 	"strings"
 
@@ -96,27 +95,37 @@ func (p *RatchetPlugin) ModuleSchemas() []*schema.ModuleSchema {
 }
 
 // secretsGuardHook creates a SecretGuard and registers it in the service registry.
-// It uses a FileProvider for persistent secret storage and also loads RATCHET_*
-// environment variables for backward compatibility.
+// It uses a FileProvider for persistent secret storage by default.
+// Set RATCHET_SECRETS_BACKEND=vault-dev to use a managed HashiCorp Vault dev server.
+// Also loads RATCHET_* environment variables for backward compatibility.
 func secretsGuardHook() plugin.WiringHook {
 	return plugin.WiringHook{
 		Name:     "ratchet.secrets_guard",
 		Priority: 85,
 		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
-			// Use FileProvider for persistent secret storage
-			secretsDir := os.Getenv("RATCHET_SECRETS_DIR")
-			if secretsDir == "" {
-				secretsDir = "data/secrets"
+			var provider secrets.Provider
+
+			backend := os.Getenv("RATCHET_SECRETS_BACKEND")
+			switch backend {
+			case "vault-dev":
+				dp, err := secrets.NewDevVaultProvider(secrets.DevVaultConfig{})
+				if err != nil {
+					app.Logger().Warn("vault-dev backend requested but vault binary not available, falling back to file provider", "error", err)
+					provider = newFileProvider(app)
+				} else {
+					provider = dp
+					// Register for cleanup on shutdown
+					app.RegisterService("ratchet-vault-dev", dp)
+				}
+			default:
+				provider = newFileProvider(app)
 			}
-			if err := os.MkdirAll(secretsDir, 0700); err != nil {
-				return fmt.Errorf("ratchet.secrets_guard: create secrets dir: %w", err)
-			}
-			fileProvider := secrets.NewFileProvider(secretsDir)
-			guard := NewSecretGuard(fileProvider)
+
+			guard := NewSecretGuard(provider)
 
 			ctx := context.Background()
 
-			// Load all file-based secrets
+			// Load all file-based secrets (no-op for vault provider)
 			_ = guard.LoadAllSecrets(ctx)
 
 			// Backward compat: also load RATCHET_* env vars into SecretGuard
@@ -137,6 +146,18 @@ func secretsGuardHook() plugin.WiringHook {
 			return nil
 		},
 	}
+}
+
+// newFileProvider creates the default FileProvider for secrets storage.
+func newFileProvider(app modular.Application) secrets.Provider {
+	secretsDir := os.Getenv("RATCHET_SECRETS_DIR")
+	if secretsDir == "" {
+		secretsDir = "data/secrets"
+	}
+	if err := os.MkdirAll(secretsDir, 0700); err != nil {
+		app.Logger().Warn("failed to create secrets dir", "error", err)
+	}
+	return secrets.NewFileProvider(secretsDir)
 }
 
 // providerRegistryHook creates a ProviderRegistry and registers it in the service registry.
