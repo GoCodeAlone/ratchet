@@ -709,7 +709,7 @@ func (c *WebhookSecurityCheck) Run(ctx context.Context) []AuditFinding {
 
 	// Check the webhooks table if it exists.
 	rows, err := c.db.QueryContext(ctx,
-		`SELECT id, name, secret_name FROM webhooks WHERE status = 'active'`)
+		`SELECT id, name, secret_name FROM webhooks WHERE enabled = 1`)
 	if err != nil {
 		// Table may not exist yet; not an error.
 		return findings

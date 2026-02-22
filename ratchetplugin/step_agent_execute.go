@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/CrisisTextLine/modular"
@@ -122,6 +123,7 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 	agentID := extractString(data, "agent_id", agentName)
 	taskID := extractString(data, "task_id", extractString(data, "id", ""))
 	projectID := extractString(data, "project_id", "")
+	teamID := extractString(data, "team_id", "")
 
 	// Log provider resolution for debugging
 	if s.app != nil {
@@ -136,9 +138,12 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 	// Build enriched context with workspace/container info
 	toolCtx := ctx
-	// Inject agent and task IDs so tools like request_approval can retrieve them.
+	// Inject agent, task, and team IDs so tools and policies can retrieve them.
 	toolCtx = tools.WithAgentID(toolCtx, agentID)
 	toolCtx = tools.WithTaskID(toolCtx, taskID)
+	if teamID != "" {
+		toolCtx = WithTeamID(toolCtx, teamID)
+	}
 	if projectID != "" {
 		toolCtx = tools.WithProjectID(toolCtx, projectID)
 
@@ -160,6 +165,37 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		// If container manager is available, inject it as ContainerExecer
 		if containerMgr != nil && containerMgr.IsAvailable() {
 			toolCtx = context.WithValue(toolCtx, tools.ContextKeyContainerID, tools.ContainerExecer(containerMgr))
+		}
+	}
+
+	// Skill injection: augment system prompt with assigned skill content.
+	if svc, ok := s.app.SvcRegistry()["ratchet-skill-manager"]; ok {
+		if sm, ok := svc.(*SkillManager); ok {
+			if skillPrompt, err := sm.BuildSkillPrompt(ctx, agentID); err == nil && skillPrompt != "" {
+				systemPrompt = systemPrompt + "\n\n" + skillPrompt
+			}
+		}
+	}
+
+	// Memory injection: augment system prompt with relevant memories before building messages.
+	var memoryStore *MemoryStore
+	if svc, ok := s.app.SvcRegistry()["ratchet-memory-store"]; ok {
+		memoryStore, _ = svc.(*MemoryStore)
+	}
+	if memoryStore != nil && agentID != "" {
+		memories, searchErr := memoryStore.Search(ctx, agentID, taskDescription, 5)
+		if searchErr == nil && len(memories) > 0 {
+			var sb strings.Builder
+			sb.WriteString(systemPrompt)
+			sb.WriteString("\n\n## Relevant Memory\n")
+			for _, m := range memories {
+				sb.WriteString("- [")
+				sb.WriteString(m.Category)
+				sb.WriteString("] ")
+				sb.WriteString(m.Content)
+				sb.WriteString("\n")
+			}
+			systemPrompt = sb.String()
 		}
 	}
 
@@ -386,6 +422,45 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 					"error":      loopMsg,
 				}
 				return &module.StepResult{Output: output}, nil
+			}
+		}
+	}
+
+	// Cancel any orphaned sub-agent tasks when the parent agent completes.
+	if svc, ok := s.app.SvcRegistry()["ratchet-sub-agent-manager"]; ok {
+		if sam, ok := svc.(*SubAgentManager); ok {
+			if cancelErr := sam.CancelChildren(ctx, agentID); cancelErr != nil {
+				if s.app != nil {
+					if logger := s.app.Logger(); logger != nil {
+						logger.Warn("agent_execute: failed to cancel sub-agent children",
+							"agent", agentName, "error", cancelErr)
+					}
+				}
+			}
+		}
+	}
+
+	// Auto-extraction: save key facts from the conversation to persistent memory.
+	if memoryStore != nil && agentID != "" {
+		var transcriptBuilder strings.Builder
+		for _, msg := range messages {
+			if msg.Role == provider.RoleAssistant && msg.Content != "" {
+				transcriptBuilder.WriteString(msg.Content)
+				transcriptBuilder.WriteString("\n\n")
+			}
+		}
+		if transcriptBuilder.Len() > 0 {
+			var embedder provider.Embedder
+			if e, ok := provider.AsEmbedder(aiProvider); ok {
+				embedder = e
+			}
+			if extractErr := memoryStore.ExtractAndSave(ctx, agentID, transcriptBuilder.String(), embedder); extractErr != nil {
+				if s.app != nil {
+					if logger := s.app.Logger(); logger != nil {
+						logger.Warn("agent_execute: failed to extract and save memory",
+							"agent", agentName, "error", extractErr)
+					}
+				}
 			}
 		}
 	}

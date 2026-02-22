@@ -276,7 +276,13 @@ func toolRegistryHook() plugin.WiringHook {
 				registry.Register(&tools.TaskCreateTool{DB: db})
 				registry.Register(&tools.TaskUpdateTool{DB: db})
 				registry.Register(&tools.MessageSendTool{DB: db})
-				registry.Register(&tools.RequestApprovalTool{DB: db})
+			}
+
+			// Register approval tool with ApprovalManager (for SSE notifications)
+			if svc, ok := app.SvcRegistry()["ratchet-approval-manager"]; ok {
+				if am, ok := svc.(*ApprovalManager); ok {
+					registry.Register(&tools.RequestApprovalTool{Manager: am})
+				}
 			}
 
 			// Register sub-agent tools if sub-agent manager is available

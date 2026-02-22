@@ -2,16 +2,20 @@ package tools
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
 	"github.com/GoCodeAlone/ratchet/provider"
-	"github.com/google/uuid"
 )
+
+// ApprovalCreator is the interface needed by RequestApprovalTool to create approvals.
+// This avoids a circular import with the ratchetplugin package.
+type ApprovalCreator interface {
+	CreateApproval(ctx context.Context, agentID, taskID, action, reason, details string) (string, error)
+}
 
 // RequestApprovalTool requests human approval before proceeding with a sensitive action.
 type RequestApprovalTool struct {
-	DB *sql.DB
+	Manager ApprovalCreator
 }
 
 func (t *RequestApprovalTool) Name() string { return "request_approval" }
@@ -49,17 +53,13 @@ func (t *RequestApprovalTool) Execute(ctx context.Context, args map[string]any) 
 	agentID, _ := AgentIDFromContext(ctx)
 	taskID, _ := TaskIDFromContext(ctx)
 
-	id := uuid.New().String()
+	if t.Manager == nil {
+		return nil, fmt.Errorf("approval manager not available")
+	}
 
-	if t.DB != nil {
-		_, err := t.DB.ExecContext(ctx,
-			`INSERT INTO approvals (id, agent_id, task_id, action, reason, details, status, timeout_minutes, created_at)
-			 VALUES (?, ?, ?, ?, ?, ?, 'pending', 30, datetime('now'))`,
-			id, agentID, taskID, action, reason, details,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("create approval record: %w", err)
-		}
+	id, err := t.Manager.CreateApproval(ctx, agentID, taskID, action, reason, details)
+	if err != nil {
+		return nil, fmt.Errorf("create approval: %w", err)
 	}
 
 	return map[string]any{

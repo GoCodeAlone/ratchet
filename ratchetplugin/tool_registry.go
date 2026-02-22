@@ -7,37 +7,30 @@ import (
 
 	"github.com/GoCodeAlone/ratchet/plugin"
 	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 )
 
-// policyContextKey is the type for context keys used in policy enforcement.
-type policyContextKey int
-
-const (
-	// ContextKeyAgentID carries the executing agent's ID for policy checks.
-	ContextKeyAgentID policyContextKey = iota
-	// ContextKeyTeamID carries the executing agent's team ID for policy checks.
-	ContextKeyTeamID
-)
-
-// WithAgentID returns a context with the agent ID set for policy enforcement.
-func WithAgentID(ctx context.Context, agentID string) context.Context {
-	return context.WithValue(ctx, ContextKeyAgentID, agentID)
+// agentIDFromToolCtx reads the agent ID set by tools.WithAgentID so that
+// tool policy enforcement uses the same context key as the rest of the system.
+func agentIDFromToolCtx(ctx context.Context) string {
+	v, _ := ctx.Value(tools.ContextKeyAgentID).(string)
+	return v
 }
+
+// teamIDFromToolCtx reads the team ID from context.
+// Team ID is stored under its own key to avoid collisions.
+type teamContextKey int
+
+const teamContextKeyTeamID teamContextKey = 0
 
 // WithTeamID returns a context with the team ID set for policy enforcement.
 func WithTeamID(ctx context.Context, teamID string) context.Context {
-	return context.WithValue(ctx, ContextKeyTeamID, teamID)
-}
-
-// AgentIDFromContext returns the agent ID from context, if set.
-func AgentIDFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(ContextKeyAgentID).(string)
-	return v
+	return context.WithValue(ctx, teamContextKeyTeamID, teamID)
 }
 
 // TeamIDFromContext returns the team ID from context, if set.
 func TeamIDFromContext(ctx context.Context) string {
-	v, _ := ctx.Value(ContextKeyTeamID).(string)
+	v, _ := ctx.Value(teamContextKeyTeamID).(string)
 	return v
 }
 
@@ -121,7 +114,7 @@ func (tr *ToolRegistry) Execute(ctx context.Context, name string, args map[strin
 	}
 
 	if pe != nil {
-		agentID := AgentIDFromContext(ctx)
+		agentID := agentIDFromToolCtx(ctx)
 		teamID := TeamIDFromContext(ctx)
 		if allowed, reason := pe.IsAllowed(ctx, name, agentID, teamID); !allowed {
 			return nil, fmt.Errorf("tool %q denied by policy: %s", name, reason)

@@ -86,6 +86,24 @@ func (am *ApprovalManager) Create(ctx context.Context, approval Approval) error 
 	return nil
 }
 
+// CreateApproval is a convenience method that satisfies the tools.ApprovalCreator interface.
+// It creates an Approval via Create() and returns the generated ID.
+func (am *ApprovalManager) CreateApproval(ctx context.Context, agentID, taskID, action, reason, details string) (string, error) {
+	id := uuid.New().String()
+	a := Approval{
+		ID:      id,
+		AgentID: agentID,
+		TaskID:  taskID,
+		Action:  action,
+		Reason:  reason,
+		Details: details,
+	}
+	if err := am.Create(ctx, a); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 // Approve marks an approval as approved and records the reviewer's comment.
 func (am *ApprovalManager) Approve(ctx context.Context, id string, comment string) error {
 	_, err := am.db.ExecContext(ctx,
@@ -188,7 +206,7 @@ func (am *ApprovalManager) WaitForResolution(ctx context.Context, id string, tim
 
 		if time.Now().After(deadline) {
 			// Mark as timed out
-			_ = am.db.QueryRowContext(ctx,
+			_, _ = am.db.ExecContext(ctx,
 				`UPDATE approvals SET status = 'timeout', resolved_at = datetime('now') WHERE id = ? AND status = 'pending'`,
 				id,
 			)
