@@ -1,6 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { configureApi } from '@gocodealone/workflow-ui/api'
 import App from './App'
+
+configureApi({ baseUrl: '/api' })
 
 const style = document.createElement('style');
 style.textContent = `

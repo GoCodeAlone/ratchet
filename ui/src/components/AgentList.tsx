@@ -311,7 +311,7 @@ function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () =>
   useEffect(() => {
     setTranscriptsLoading(true);
     fetchAgentTranscripts(agent.id)
-      .then((data) => setTranscripts(data ?? []))
+      .then((data: TranscriptEntry[]) => setTranscripts(data ?? []))
       .catch(() => {})
       .finally(() => setTranscriptsLoading(false));
   }, [agent.id]);

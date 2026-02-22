@@ -113,7 +113,7 @@ export default function Layout() {
           }}
         >
           <div style={{ fontSize: '13px', color: colors.subtext1, marginBottom: '8px' }}>
-            {user?.username ?? 'User'}
+            {String(user && 'username' in user ? user.username : user?.email ?? 'User')}
           </div>
           <button
             onClick={logout}

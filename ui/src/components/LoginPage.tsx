@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { colors, baseStyles } from '../theme';
 

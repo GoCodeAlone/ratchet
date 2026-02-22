@@ -230,7 +230,7 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
   useEffect(() => {
     setLoadingTranscripts(true);
     fetchTaskTranscripts(task.id)
-      .then((data) => setTranscripts(data ?? []))
+      .then((data: TranscriptEntry[]) => setTranscripts(data ?? []))
       .catch(() => setTranscripts([]))
       .finally(() => setLoadingTranscripts(false));
   }, [task.id]);
@@ -240,7 +240,7 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
     if (task.status !== 'in_progress') return;
     const interval = setInterval(() => {
       fetchTaskTranscripts(task.id)
-        .then((data) => setTranscripts(data ?? []))
+        .then((data: TranscriptEntry[]) => setTranscripts(data ?? []))
         .catch(() => {});
     }, 5000);
     return () => clearInterval(interval);
@@ -436,7 +436,7 @@ function NewTaskModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (i
   useEffect(() => {
     fetchAgents();
     fetchProjects()
-      .then((data) => setProjects(data ?? []))
+      .then((data: Project[]) => setProjects(data ?? []))
       .catch(() => {});
   }, [fetchAgents]);
 

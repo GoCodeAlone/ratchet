@@ -431,7 +431,7 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     Promise.all([
       fetchProjectTasks(project.id).then(setTasks).catch(() => {}),
       fetchProjectTranscripts(project.id).then(setTranscripts).catch(() => {}),
-      fetchProjectRepos(project.id).then((data) => setRepos(data ?? [])).catch(() => {}),
+      fetchProjectRepos(project.id).then((data: ProjectRepo[]) => setRepos(data ?? [])).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, [project.id]);
 

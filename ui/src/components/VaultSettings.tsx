@@ -73,13 +73,13 @@ export default function VaultSettings() {
   const loadStatus = () => {
     setLoading(true);
     fetchVaultStatus()
-      .then((data) => {
+      .then((data: VaultStatus) => {
         setStatus(data);
         if (data.address) setAddress(data.address);
         if (data.mount_path) setMountPath(data.mount_path);
         if (data.namespace) setNamespace(data.namespace);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load vault status'))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load vault status'))
       .finally(() => setLoading(false));
   };
 

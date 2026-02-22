@@ -21,8 +21,8 @@ export default function Settings() {
 
   useEffect(() => {
     apiGet<ServerInfo>('/info')
-      .then((data) => setInfo(data))
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load server info'))
+      .then((data: ServerInfo) => setInfo(data))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Failed to load server info'))
       .finally(() => setLoading(false));
   }, []);
 

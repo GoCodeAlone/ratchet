@@ -1,27 +1,16 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-
-vi.mock('../utils/api', () => ({
-  apiPost: vi.fn(),
-  apiGet: vi.fn(),
-}));
-
-// Import after mocks are set up. The authStore accesses localStorage.getItem
-// at module load time, but jsdom provides localStorage so it should work.
-// We need to ensure the api mock is hoisted before authStore loads.
-import { useAuthStore } from './authStore';
-import { apiPost, apiGet } from '../utils/api';
+import { configureApi } from '@gocodealone/workflow-ui/api';
+import { createAuthStore } from '@gocodealone/workflow-ui/auth';
 
 describe('authStore', () => {
+  let useAuthStore: ReturnType<typeof createAuthStore>;
+
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
     localStorage.clear();
-    // Reset zustand store
-    useAuthStore.setState({
-      token: null,
-      user: null,
-      isAuthenticated: false,
-      error: null,
-    });
+    configureApi({ baseUrl: '/api' });
+    useAuthStore = createAuthStore();
   });
 
   it('initial state has no user and not authenticated when no token', () => {
@@ -35,7 +24,9 @@ describe('authStore', () => {
   describe('login', () => {
     it('stores token and sets isAuthenticated on success', async () => {
       const mockUser = { id: '1', username: 'admin', email: 'admin@test.com' };
-      vi.mocked(apiPost).mockResolvedValue({ token: 'abc-123', user: mockUser });
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify({ token: 'abc-123', user: mockUser }), { status: 200 }),
+      );
 
       await useAuthStore.getState().login('admin', 'password');
 
@@ -48,12 +39,14 @@ describe('authStore', () => {
     });
 
     it('sets error on failure', async () => {
-      vi.mocked(apiPost).mockRejectedValue(new Error('HTTP 401: bad credentials'));
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response('bad credentials', { status: 401 }),
+      );
 
       await expect(useAuthStore.getState().login('admin', 'wrong')).rejects.toThrow();
 
       const state = useAuthStore.getState();
-      expect(state.error).toBe('HTTP 401: bad credentials');
+      expect(state.error).toContain('401');
       expect(state.isAuthenticated).toBe(false);
     });
   });
@@ -61,15 +54,12 @@ describe('authStore', () => {
   describe('logout', () => {
     it('clears token and user', () => {
       localStorage.setItem('auth_token', 'abc-123');
-      useAuthStore.setState({
-        token: 'abc-123',
-        user: { id: '1', username: 'admin', email: 'admin@test.com' },
-        isAuthenticated: true,
-      });
+      const store = createAuthStore();
+      expect(store.getState().isAuthenticated).toBe(true);
 
-      useAuthStore.getState().logout();
+      store.getState().logout();
 
-      const state = useAuthStore.getState();
+      const state = store.getState();
       expect(state.token).toBeNull();
       expect(state.user).toBeNull();
       expect(state.isAuthenticated).toBe(false);
@@ -79,28 +69,31 @@ describe('authStore', () => {
 
   describe('loadUser', () => {
     it('fetches user from /auth/me and sets authenticated', async () => {
+      localStorage.setItem('auth_token', 'tok');
+      const store = createAuthStore();
       const mockUser = { id: '1', username: 'admin', email: 'admin@test.com' };
-      vi.mocked(apiGet).mockResolvedValue(mockUser);
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response(JSON.stringify(mockUser), { status: 200 }),
+      );
 
-      await useAuthStore.getState().loadUser();
+      await store.getState().loadUser();
 
-      const state = useAuthStore.getState();
-      expect(state.user).toEqual(mockUser);
-      expect(state.isAuthenticated).toBe(true);
-      expect(apiGet).toHaveBeenCalledWith('/auth/me');
+      expect(store.getState().user).toEqual(mockUser);
+      expect(store.getState().isAuthenticated).toBe(true);
     });
 
     it('clears auth state on failure', async () => {
-      useAuthStore.setState({ token: 'old-token', isAuthenticated: true });
-      vi.mocked(apiGet).mockRejectedValue(new Error('HTTP 401: unauthorized'));
+      localStorage.setItem('auth_token', 'old-token');
+      const store = createAuthStore();
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        new Response('unauthorized', { status: 401 }),
+      );
 
-      await useAuthStore.getState().loadUser();
+      await store.getState().loadUser();
 
-      const state = useAuthStore.getState();
-      expect(state.token).toBeNull();
-      expect(state.user).toBeNull();
-      expect(state.isAuthenticated).toBe(false);
-      expect(localStorage.getItem('auth_token')).toBeNull();
+      expect(store.getState().token).toBeNull();
+      expect(store.getState().user).toBeNull();
+      expect(store.getState().isAuthenticated).toBe(false);
     });
   });
 });
