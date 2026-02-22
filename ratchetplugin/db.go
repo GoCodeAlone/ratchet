@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS agents (
     name TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT '',
     system_prompt TEXT NOT NULL DEFAULT '',
-    provider TEXT NOT NULL DEFAULT 'mock',
+    provider TEXT NOT NULL DEFAULT '',
     model TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'idle',
     team_id TEXT NOT NULL DEFAULT '',
@@ -196,6 +196,9 @@ func dbInitHook() plugin.WiringHook {
 
 			// Add workspace_spec column to projects if missing (for existing databases)
 			_, _ = db.Exec("ALTER TABLE projects ADD COLUMN workspace_spec TEXT NOT NULL DEFAULT '{}'")
+
+			// Migrate seeded agents from hardcoded 'mock' provider to '' (use default)
+			_, _ = db.Exec("UPDATE agents SET provider = '' WHERE provider = 'mock'")
 
 			// Seed agents from config modules
 			if cfg == nil {

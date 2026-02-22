@@ -3,7 +3,7 @@ import { useAgentStore } from '../store/agentStore';
 import { useProviderStore } from '../store/providerStore';
 import { colors, statusColors, baseStyles } from '../theme';
 import { AgentInfo, AgentStatus, TranscriptEntry } from '../types';
-import { createAgent, deleteAgent, fetchAgentTranscripts } from '../utils/api';
+import { createAgent, updateAgent, deleteAgent, fetchAgentTranscripts } from '../utils/api';
 
 function StatusBadge({ status }: { status: AgentStatus }) {
   const color = statusColors[status] ?? colors.overlay0;
@@ -35,12 +35,17 @@ function StatusBadge({ status }: { status: AgentStatus }) {
   );
 }
 
-function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (data: { name: string; role?: string; system_prompt?: string; team_id?: string; provider?: string; model?: string }) => Promise<void> }) {
-  const [name, setName] = useState('');
-  const [role, setRole] = useState('');
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [teamId, setTeamId] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState('');
+function AgentModal({ onClose, onSubmit, agent }: {
+  onClose: () => void;
+  onSubmit: (data: { name: string; role?: string; system_prompt?: string; team_id?: string; provider?: string; model?: string }) => Promise<void>;
+  agent?: AgentInfo;
+}) {
+  const isEdit = !!agent;
+  const [name, setName] = useState(agent?.name ?? '');
+  const [role, setRole] = useState(agent?.role ?? '');
+  const [systemPrompt, setSystemPrompt] = useState(agent?.system_prompt ?? '');
+  const [teamId, setTeamId] = useState(agent?.team_id ?? '');
+  const [selectedProvider, setSelectedProvider] = useState(agent?.provider ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { providers, fetchProviders } = useProviderStore();
@@ -56,17 +61,30 @@ function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
     setError('');
     try {
       const chosen = providers.find((p) => p.alias === selectedProvider);
-      await onSubmit({
-        name: name.trim(),
-        role: role.trim() || undefined,
-        system_prompt: systemPrompt.trim() || undefined,
-        team_id: teamId.trim() || undefined,
-        provider: selectedProvider || undefined,
-        model: chosen?.model || undefined,
-      });
+      if (isEdit) {
+        // Edit: always send all fields so cleared values take effect
+        await onSubmit({
+          name: name.trim(),
+          role: role.trim(),
+          system_prompt: systemPrompt.trim(),
+          team_id: teamId.trim(),
+          provider: selectedProvider,
+          model: chosen?.model ?? '',
+        });
+      } else {
+        // Create: omit empty fields so backend defaults apply
+        await onSubmit({
+          name: name.trim(),
+          role: role.trim() || undefined,
+          system_prompt: systemPrompt.trim() || undefined,
+          team_id: teamId.trim() || undefined,
+          provider: selectedProvider || undefined,
+          model: chosen?.model || undefined,
+        });
+      }
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create agent');
+      setError(err instanceof Error ? err.message : isEdit ? 'Failed to update agent' : 'Failed to create agent');
     } finally {
       setLoading(false);
     }
@@ -75,7 +93,7 @@ function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div style={{ ...baseStyles.card, width: '480px', padding: '28px' }}>
-        <h3 style={{ margin: '0 0 20px', color: colors.text, fontSize: '16px' }}>New Agent</h3>
+        <h3 style={{ margin: '0 0 20px', color: colors.text, fontSize: '16px' }}>{isEdit ? 'Edit Agent' : 'New Agent'}</h3>
         {error && (
           <div style={{ color: colors.red, fontSize: '13px', marginBottom: '12px', padding: '8px 12px', backgroundColor: `${colors.red}11`, borderRadius: '6px' }}>
             {error}
@@ -111,12 +129,12 @@ function NewAgentModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (
           </div>
           <div style={{ marginBottom: '20px' }}>
             <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>System Prompt</label>
-            <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="Optional system prompt" rows={3} style={{ ...baseStyles.input, resize: 'vertical', fontFamily: 'inherit' }} />
+            <textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} placeholder="Optional system prompt" rows={4} style={{ ...baseStyles.input, resize: 'vertical', fontFamily: 'inherit' }} />
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
             <button type="button" onClick={onClose} style={baseStyles.button.secondary}>Cancel</button>
             <button type="submit" disabled={loading || !name.trim()} style={{ ...baseStyles.button.primary, opacity: loading || !name.trim() ? 0.6 : 1 }}>
-              {loading ? 'Creating...' : 'Create Agent'}
+              {loading ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Agent')}
             </button>
           </div>
         </form>
@@ -177,7 +195,7 @@ function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () =>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
         <div>
           <div style={{ color: colors.subtext0, marginBottom: '3px' }}>Provider</div>
-          <div style={{ color: colors.text, fontFamily: 'monospace' }}>{agent.provider || 'mock'}</div>
+          <div style={{ color: colors.text, fontFamily: 'monospace' }}>{agent.provider || 'default'}</div>
         </div>
         <div>
           <div style={{ color: colors.subtext0, marginBottom: '3px' }}>Model</div>
@@ -247,6 +265,7 @@ export default function AgentList() {
   const [selected, setSelected] = useState<AgentInfo | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [editAgent, setEditAgent] = useState<AgentInfo | null>(null);
 
   useEffect(() => {
     fetchAgents();
@@ -272,6 +291,13 @@ export default function AgentList() {
 
   async function handleCreate(data: { name: string; role?: string; system_prompt?: string; team_id?: string; provider?: string; model?: string }) {
     await createAgent(data);
+    await fetchAgents();
+  }
+
+  async function handleUpdate(data: { name: string; role?: string; system_prompt?: string; team_id?: string; provider?: string; model?: string }) {
+    if (!editAgent) return;
+    await updateAgent(editAgent.id, data);
+    if (selected?.id === editAgent.id) setSelected(null);
     await fetchAgents();
   }
 
@@ -397,7 +423,7 @@ export default function AgentList() {
                     {agent.role}
                   </td>
                   <td style={{ ...baseStyles.td, color: colors.subtext0, fontFamily: 'monospace', fontSize: '12px' }}>
-                    {agent.provider || 'mock'}
+                    {agent.provider || 'default'}
                   </td>
                   <td style={baseStyles.td}>
                     <StatusBadge status={agent.status} />
@@ -446,6 +472,18 @@ export default function AgentList() {
                           Stop
                         </button>
                       )}
+                      {(agent.status === 'idle' || agent.status === 'stopped' || agent.status === 'error') && (
+                        <button
+                          onClick={() => setEditAgent(agent)}
+                          style={{
+                            ...baseStyles.button.secondary,
+                            padding: '4px 12px',
+                            fontSize: '12px',
+                          }}
+                        >
+                          Edit
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDelete(agent.id)}
                         disabled={actionLoading === agent.id + '-delete'}
@@ -471,7 +509,8 @@ export default function AgentList() {
         </div>
       )}
 
-      {showModal && <NewAgentModal onClose={() => setShowModal(false)} onSubmit={handleCreate} />}
+      {showModal && <AgentModal onClose={() => setShowModal(false)} onSubmit={handleCreate} />}
+      {editAgent && <AgentModal onClose={() => setEditAgent(null)} onSubmit={handleUpdate} agent={editAgent} />}
     </div>
   );
 }

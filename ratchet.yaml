@@ -105,7 +105,7 @@ modules:
           name: Orchestrator
           role: lead
           system_prompt: "You are the lead orchestrator agent. Plan work, delegate tasks to team members, and ensure forward progress. Communicate clearly with your team and track task completion."
-          provider: mock
+          provider: ""
           model: ""
           team_id: alpha
           is_lead: true
@@ -113,7 +113,7 @@ modules:
           name: Developer
           role: developer
           system_prompt: "You are a software developer agent. Write clean, tested, well-documented code. Ask for clarification when requirements are ambiguous. Report progress to the orchestrator."
-          provider: mock
+          provider: ""
           model: ""
           team_id: alpha
           is_lead: false
@@ -121,7 +121,7 @@ modules:
           name: Reviewer
           role: reviewer
           system_prompt: "You are a code reviewer agent. Review code for correctness, performance, security issues, and style. Provide constructive feedback and approve changes when ready."
-          provider: mock
+          provider: ""
           model: ""
           team_id: alpha
           is_lead: false
@@ -539,7 +539,7 @@ workflows:
                   - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"role\") }}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"system_prompt\") }}"
-                  - "{{ default \"mock\" (index .steps \"parse-request\" \"body\" \"provider\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"provider\") }}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"model\") }}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"team_id\") }}"
                   - "{{ .steps.prepare.now }}"
@@ -593,9 +593,9 @@ workflows:
               type: step.db_exec
               config:
                 database: ratchet-db
-                query: "UPDATE agents SET name = COALESCE(NULLIF(?, ''), name), role = COALESCE(NULLIF(?, ''), role), system_prompt = COALESCE(NULLIF(?, ''), system_prompt), provider = COALESCE(NULLIF(?, ''), provider), model = COALESCE(NULLIF(?, ''), model), team_id = COALESCE(NULLIF(?, ''), team_id), updated_at = datetime('now') WHERE id = ?"
+                query: "UPDATE agents SET name = ?, role = ?, system_prompt = ?, provider = ?, model = ?, team_id = ?, updated_at = datetime('now') WHERE id = ?"
                 params:
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"name\") }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"role\") }}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"system_prompt\") }}"
                   - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"provider\") }}"
@@ -849,6 +849,25 @@ workflows:
                 status: 200
                 body_from: "steps.test-connection"
 
+      # List available models for a provider type
+      - method: POST
+        path: "/api/providers/models"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: list-models
+              type: step.provider_models
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-models"
+
       # ============================================================
       # SECRET ROUTES (auth required)
       # ============================================================
@@ -1014,6 +1033,167 @@ workflows:
                 body_from: "steps.reset-vault"
 
       # ============================================================
+      # OAUTH ROUTES (no auth required — used during login flow)
+      # ============================================================
+
+      # OAuth code exchange (Anthropic backend proxy for CORS)
+      - method: POST
+        path: "/api/oauth/exchange"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: exchange
+              type: step.oauth_exchange
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.exchange"
+
+      # ============================================================
+      # MCP SERVER ROUTES (auth required)
+      # ============================================================
+
+      # List all MCP servers
+      - method: GET
+        path: "/api/mcp-servers"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-servers
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, transport, command, args, url, status, created_at FROM mcp_servers ORDER BY name ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-servers.rows"
+
+      # Create a new MCP server
+      - method: POST
+        path: "/api/mcp-servers"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [name, command]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO mcp_servers (id, name, transport, command, args, url, status) VALUES (?, ?, ?, ?, ?, ?, 'active')"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  - "{{ default \"stdio\" (index .steps \"parse-request\" \"body\" \"transport\") }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"command\"}}"
+                  - "{{ default \"[]\" (index .steps \"parse-request\" \"body\" \"args\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"url\") }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  status: "active"
+
+      # Update an MCP server
+      - method: PATCH
+        path: "/api/mcp-servers/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: update
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE mcp_servers SET name = COALESCE(NULLIF(?, ''), name), transport = COALESCE(NULLIF(?, ''), transport), command = COALESCE(NULLIF(?, ''), command), args = COALESCE(NULLIF(?, ''), args), url = COALESCE(NULLIF(?, ''), url), status = COALESCE(NULLIF(?, ''), status) WHERE id = ?"
+                params:
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"name\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"transport\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"command\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"args\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"url\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"status\") }}"
+                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  success: true
+
+      # Delete an MCP server
+      - method: DELETE
+        path: "/api/mcp-servers/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM mcp_servers WHERE id = ?"
+                params:
+                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  success: true
+
+      # Reload MCP server connections
+      - method: POST
+        path: "/api/mcp-servers/reload"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: reload
+              type: step.mcp_reload
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.reload"
+
+      # ============================================================
       # TRANSCRIPT ROUTES (auth required)
       # ============================================================
 
@@ -1052,6 +1232,30 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE agent_id = ? ORDER BY created_at ASC"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-transcripts.rows"
+
+      # Get transcripts for a task
+      - method: GET
+        path: "/api/tasks/{id}/transcripts"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-transcripts
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE task_id = ? ORDER BY created_at ASC"
                 params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
                 mode: list
             - name: respond
@@ -1621,7 +1825,20 @@ pipelines:
           field: "steps.find-active-agents.count"
           routes:
             "0": done
-          default: find-pending-task
+          default: auto-assign-tasks
+
+      - name: auto-assign-tasks
+        type: step.db_exec
+        config:
+          database: ratchet-db
+          query: >
+            UPDATE tasks SET assigned_to = (
+              SELECT a.id FROM agents a WHERE a.status = 'active'
+              AND a.id NOT IN (SELECT assigned_to FROM tasks WHERE status = 'in_progress' AND assigned_to != '')
+              ORDER BY RANDOM() LIMIT 1
+            ), updated_at = datetime('now')
+            WHERE status = 'pending' AND (assigned_to = '' OR assigned_to IS NULL)
+            AND EXISTS (SELECT 1 FROM agents WHERE status = 'active')
 
       - name: find-pending-task
         type: step.db_query
@@ -1648,8 +1865,16 @@ pipelines:
       - name: execute-agent
         type: step.agent_execute
         config:
-          max_iterations: 3
+          max_iterations: 10
           provider_service: ratchet-ai
+
+      - name: check-agent-result
+        type: step.conditional
+        config:
+          field: "steps.execute-agent.status"
+          routes:
+            "failed": mark-failed
+          default: mark-completed
 
       - name: mark-completed
         type: step.db_exec
@@ -1658,6 +1883,15 @@ pipelines:
           query: "UPDATE tasks SET status = 'completed', result = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
           params:
             - "{{index (index .steps \"execute-agent\") \"result\"}}"
+            - "{{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}}"
+
+      - name: mark-failed
+        type: step.db_exec
+        config:
+          database: ratchet-db
+          query: "UPDATE tasks SET status = 'failed', error = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
+          params:
+            - "{{index (index .steps \"execute-agent\") \"error\"}}"
             - "{{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}}"
 
       - name: log-completion

@@ -48,6 +48,7 @@ func NewProviderRegistry(db *sql.DB, secretsProvider secrets.Provider) *Provider
 	r.factories["mock"] = mockProviderFactory
 	r.factories["anthropic"] = anthropicProviderFactory
 	r.factories["openai"] = openaiProviderFactory
+	r.factories["openrouter"] = openrouterProviderFactory
 	r.factories["copilot"] = copilotProviderFactory
 
 	return r
@@ -237,6 +238,13 @@ func openaiProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provi
 		BaseURL:   cfg.BaseURL,
 		MaxTokens: cfg.MaxTokens,
 	}), nil
+}
+
+func openrouterProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = "https://openrouter.ai/api/v1"
+	}
+	return openaiProviderFactory(apiKey, cfg)
 }
 
 func copilotProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {

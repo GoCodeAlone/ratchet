@@ -42,7 +42,7 @@ func New() *RatchetPlugin {
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange"},
 				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager", "ratchet.provider_registry"},
 			},
 		},
@@ -74,6 +74,9 @@ func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 		"step.secret_manage":     newSecretManageFactory(),
 		"step.provider_test":     newProviderTestFactory(),
 		"step.vault_config":      newVaultConfigFactory(),
+		"step.provider_models":   newProviderModelsFactory(),
+		"step.mcp_reload":        newMCPReloadFactory(),
+		"step.oauth_exchange":    newOAuthExchangeFactory(),
 	}
 }
 

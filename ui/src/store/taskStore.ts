@@ -8,12 +8,20 @@ interface TaskFilter {
   search?: string;
 }
 
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  assigned_to?: string;
+  project_id?: string;
+  priority?: number;
+}
+
 interface TaskState {
   tasks: Task[];
   loading: boolean;
   error: string | null;
   fetchTasks: (filter?: TaskFilter) => Promise<void>;
-  createTask: (title: string, description: string) => Promise<void>;
+  createTask: (input: CreateTaskInput) => Promise<void>;
   updateTask: (id: string, changes: Partial<Task>) => Promise<void>;
 }
 
@@ -43,9 +51,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }
   },
 
-  createTask: async (title: string, description: string) => {
+  createTask: async (input: CreateTaskInput) => {
     try {
-      await apiPost('/tasks', { title, description });
+      const body: Record<string, unknown> = { title: input.title };
+      if (input.description) body.description = input.description;
+      if (input.assigned_to) body.assigned_to = input.assigned_to;
+      if (input.project_id) body.project_id = input.project_id;
+      if (input.priority !== undefined) body.priority = input.priority;
+      await apiPost('/tasks', body);
       await get().fetchTasks();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to create task';

@@ -57,14 +57,14 @@ func (t *ShellExecTool) Execute(ctx context.Context, args map[string]any) (any, 
 	if cExec, ok := ctx.Value(ContextKeyContainerID).(ContainerExecer); ok {
 		if projectID, ok := ProjectIDFromContext(ctx); ok {
 			stdout, stderr, exitCode, err := cExec.ExecInContainer(ctx, projectID, command, "/workspace", timeout)
-			if err != nil {
-				return nil, fmt.Errorf("container exec: %w", err)
+			if err == nil {
+				return map[string]any{
+					"stdout":    stdout,
+					"stderr":    stderr,
+					"exit_code": exitCode,
+				}, nil
 			}
-			return map[string]any{
-				"stdout":    stdout,
-				"stderr":    stderr,
-				"exit_code": exitCode,
-			}, nil
+			// Container exec failed — fall through to host execution
 		}
 	}
 

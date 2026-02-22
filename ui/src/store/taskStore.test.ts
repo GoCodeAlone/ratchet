@@ -83,17 +83,38 @@ describe('taskStore', () => {
       vi.mocked(apiPost).mockResolvedValue({ id: 'task-new' });
       vi.mocked(apiGet).mockResolvedValue([mockTask]);
 
-      await useTaskStore.getState().createTask('New Task', 'Description');
+      await useTaskStore.getState().createTask({ title: 'New Task', description: 'Description' });
 
       expect(apiPost).toHaveBeenCalledWith('/tasks', { title: 'New Task', description: 'Description' });
       expect(apiGet).toHaveBeenCalledWith('/tasks');
+    });
+
+    it('includes optional fields when provided', async () => {
+      vi.mocked(apiPost).mockResolvedValue({ id: 'task-new' });
+      vi.mocked(apiGet).mockResolvedValue([mockTask]);
+
+      await useTaskStore.getState().createTask({
+        title: 'New Task',
+        description: 'Description',
+        assigned_to: 'agent-1',
+        project_id: 'proj-1',
+        priority: 5,
+      });
+
+      expect(apiPost).toHaveBeenCalledWith('/tasks', {
+        title: 'New Task',
+        description: 'Description',
+        assigned_to: 'agent-1',
+        project_id: 'proj-1',
+        priority: 5,
+      });
     });
 
     it('sets error and throws on failure', async () => {
       vi.mocked(apiPost).mockRejectedValue(new Error('HTTP 400: bad request'));
 
       await expect(
-        useTaskStore.getState().createTask('Bad', 'Task')
+        useTaskStore.getState().createTask({ title: 'Bad' })
       ).rejects.toThrow('HTTP 400: bad request');
 
       expect(useTaskStore.getState().error).toBe('HTTP 400: bad request');

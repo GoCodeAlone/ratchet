@@ -38,6 +38,18 @@ func (tr *ToolRegistry) RegisterMCP(serverName string, tools []plugin.Tool) {
 	}
 }
 
+// UnregisterMCP removes all tools registered under the given MCP server name.
+func (tr *ToolRegistry) UnregisterMCP(serverName string) {
+	prefix := "mcp_" + serverName + "__"
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	for name := range tr.tools {
+		if len(name) > len(prefix) && name[:len(prefix)] == prefix {
+			delete(tr.tools, name)
+		}
+	}
+}
+
 // Get returns a tool by name.
 func (tr *ToolRegistry) Get(name string) (plugin.Tool, bool) {
 	tr.mu.RLock()

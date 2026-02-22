@@ -3,6 +3,7 @@ import { colors, baseStyles } from '../theme';
 import { apiGet } from '../utils/api';
 import ProviderList from './ProviderList';
 import VaultSettings from './VaultSettings';
+import McpServerList from './McpServerList';
 
 interface ServerInfo {
   version: string;
@@ -141,23 +142,7 @@ export default function Settings() {
       </div>
 
       {/* MCP Servers */}
-      <div style={{ ...baseStyles.card }}>
-        <SectionTitle>MCP Servers</SectionTitle>
-        <div
-          style={{
-            padding: '10px 14px',
-            backgroundColor: colors.mantle,
-            borderRadius: '6px',
-            fontSize: '13px',
-            color: colors.subtext0,
-            lineHeight: '1.6',
-          }}
-        >
-          MCP (Model Context Protocol) servers provide additional tools to agents. Configure them
-          via <code style={{ color: colors.blue }}>ratchet.yaml</code> or the{' '}
-          <code style={{ color: colors.blue }}>POST /api/mcp-servers</code> API endpoint.
-        </div>
-      </div>
+      <McpServerList />
     </div>
   );
 }

@@ -233,6 +233,70 @@ func (m *MCPClientModule) Stop(_ context.Context) error {
 	return nil
 }
 
+// ReloadServers stops all existing MCP clients and starts new ones from the given configs.
+// Returns the count of successfully started servers and any error messages.
+func (m *MCPClientModule) ReloadServers(configs []mcpServerConfig) (int, []string) {
+	// Stop and unregister existing clients
+	for name, c := range m.clients {
+		_ = c.close()
+		if m.registry != nil {
+			m.registry.UnregisterMCP(name)
+		}
+	}
+	m.clients = make(map[string]*mcpClient)
+	m.servers = configs
+
+	reloaded := 0
+	var errors []string
+
+	for _, srv := range configs {
+		if srv.Command == "" {
+			continue
+		}
+		client, err := newMCPClient(srv.Name, srv.Command, srv.Args)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", srv.Name, err))
+			continue
+		}
+		m.clients[srv.Name] = client
+
+		// Initialize
+		_, _ = client.call("initialize", map[string]any{
+			"protocolVersion": "2024-11-05",
+			"capabilities":    map[string]any{},
+			"clientInfo": map[string]any{
+				"name":    "ratchet",
+				"version": "1.0.0",
+			},
+		})
+
+		// Discover tools
+		result, err := client.call("tools/list", nil)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: tool discovery failed: %v", srv.Name, err))
+			reloaded++
+			continue
+		}
+		var toolList mcpToolListResult
+		if err := json.Unmarshal(result, &toolList); err != nil {
+			errors = append(errors, fmt.Sprintf("%s: tool parse failed: %v", srv.Name, err))
+			reloaded++
+			continue
+		}
+
+		if m.registry != nil {
+			var adapted []ratchetplugin_pkg.Tool
+			for _, info := range toolList.Tools {
+				adapted = append(adapted, &MCPToolAdapter{client: client, info: info})
+			}
+			m.registry.RegisterMCP(srv.Name, adapted)
+		}
+		reloaded++
+	}
+
+	return reloaded, errors
+}
+
 func newMCPClientFactory() plugin.ModuleFactory {
 	return func(name string, cfg map[string]any) modular.Module {
 		mod := &MCPClientModule{

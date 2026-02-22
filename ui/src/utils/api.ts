@@ -87,6 +87,7 @@ export const getContainerStatus = (projectId: string) => apiGet<ContainerStatus>
 // Transcripts
 export const fetchTranscripts = () => apiGet<TranscriptEntry[]>('/transcripts');
 export const fetchAgentTranscripts = (agentId: string) => apiGet<TranscriptEntry[]>(`/agents/${agentId}/transcripts`);
+export const fetchTaskTranscripts = (taskId: string) => apiGet<TranscriptEntry[]>(`/tasks/${taskId}/transcripts`);
 
 // Providers
 export const fetchProviders = () => apiGet<LLMProvider[]>('/providers');
@@ -130,3 +131,27 @@ export const testVaultConnection = (req: VaultTestRequest) => apiPost<VaultResul
 export const configureVault = (req: VaultConfigureRequest) => apiPost<VaultResult>('/vault/configure', req);
 export const migrateVaultSecrets = () => apiPost<VaultResult>('/vault/migrate', {});
 export const resetVault = () => apiPost<VaultResult>('/vault/reset', {});
+
+// Dynamic Model Listing
+export interface ModelInfo {
+  id: string;
+  name: string;
+  context_window: number;
+}
+export interface ModelListResult {
+  success: boolean;
+  models?: ModelInfo[];
+  error?: string;
+}
+export const listProviderModels = (type: string, apiKey: string, baseUrl?: string) =>
+  apiPost<ModelListResult>('/providers/models', { type, api_key: apiKey, base_url: baseUrl || '' });
+
+// MCP Servers
+import type { MCPServer } from '../types';
+export const fetchMcpServers = () => apiGet<MCPServer[]>('/mcp-servers');
+export const createMcpServer = (data: { name: string; command: string; args?: string; url?: string; transport?: string }) =>
+  apiPost<MCPServer>('/mcp-servers', data);
+export const updateMcpServer = (id: string, data: Partial<MCPServer>) =>
+  apiPatch<MCPServer>(`/mcp-servers/${id}`, data);
+export const deleteMcpServer = (id: string) => apiDelete<void>(`/mcp-servers/${id}`);
+export const reloadMcpServers = () => apiPost<{ success: boolean; reloaded: number; errors?: string[] }>('/mcp-servers/reload');

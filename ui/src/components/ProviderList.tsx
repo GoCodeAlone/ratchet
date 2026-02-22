@@ -125,8 +125,39 @@ export default function ProviderList() {
       ) : error ? (
         <div style={{ color: colors.red, fontSize: '14px' }}>{error}</div>
       ) : providers.length === 0 ? (
-        <div style={{ color: colors.overlay0, fontSize: '14px' }}>
-          No providers configured.
+        <div style={{ textAlign: 'center', padding: '32px 24px' }}>
+          <div style={{ fontSize: '15px', fontWeight: '600', color: colors.text, marginBottom: '8px' }}>
+            Connect an AI provider to get started
+          </div>
+          <div style={{ fontSize: '13px', color: colors.subtext0, marginBottom: '20px', lineHeight: '1.6' }}>
+            Ratchet agents need an AI provider to think and act. Add your Anthropic or OpenAI
+            API key, or use the built-in mock provider for testing.
+          </div>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '16px',
+            marginBottom: '20px',
+            fontSize: '12px',
+          }}>
+            <a href="https://console.anthropic.com/settings/keys"
+               target="_blank" rel="noopener noreferrer"
+               style={{ color: colors.peach, textDecoration: 'none' }}>
+              Get Anthropic key
+            </a>
+            <span style={{ color: colors.surface2 }}>|</span>
+            <a href="https://platform.openai.com/api-keys"
+               target="_blank" rel="noopener noreferrer"
+               style={{ color: colors.green, textDecoration: 'none' }}>
+              Get OpenAI key
+            </a>
+          </div>
+          <button
+            onClick={() => setShowWizard(true)}
+            style={{ ...baseStyles.button.primary, fontSize: '13px' }}
+          >
+            + Add Your First Provider
+          </button>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -252,7 +283,7 @@ export default function ProviderList() {
           editAlias={editProvider.alias}
           editType={editProvider.type}
           editModel={editProvider.model}
-          editBaseUrl={editProvider.api_base_url}
+          editBaseUrl={editProvider.base_url}
         />
       )}
     </div>

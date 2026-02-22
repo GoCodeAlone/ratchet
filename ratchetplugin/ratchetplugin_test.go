@@ -93,6 +93,16 @@ func (m *mockApp) RegisterService(name string, svc any) error {
 	return nil
 }
 
+// Logger returns a no-op logger so tests don't panic on nil embedded interface.
+func (m *mockApp) Logger() modular.Logger { return &noopLogger{} }
+
+type noopLogger struct{}
+
+func (n *noopLogger) Info(msg string, args ...any)  {}
+func (n *noopLogger) Error(msg string, args ...any) {}
+func (n *noopLogger) Warn(msg string, args ...any)  {}
+func (n *noopLogger) Debug(msg string, args ...any) {}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -996,7 +1006,7 @@ func TestPlugin_StepFactories(t *testing.T) {
 	p := New()
 	factories := p.StepFactories()
 
-	expected := []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config"}
+	expected := []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange"}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {
 			t.Errorf("missing step factory: %s", name)

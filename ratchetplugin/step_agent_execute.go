@@ -48,7 +48,7 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 	if regSvc, ok := s.app.SvcRegistry()["ratchet-provider-registry"]; ok {
 		if registry, ok := regSvc.(*ProviderRegistry); ok {
 			var regErr error
-			if providerAlias != "" {
+			if providerAlias != "" && providerAlias != "default" {
 				aiProvider, regErr = registry.GetByAlias(ctx, providerAlias)
 			} else {
 				aiProvider, regErr = registry.GetDefault(ctx)
@@ -119,6 +119,17 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 	taskID := extractString(data, "task_id", extractString(data, "id", ""))
 	projectID := extractString(data, "project_id", "")
 
+	// Log provider resolution for debugging
+	if s.app != nil {
+		if logger := s.app.Logger(); logger != nil {
+			logger.Info("agent_execute: provider resolved",
+				"agent", agentName,
+				"provider_alias", providerAlias,
+				"provider_name", aiProvider.Name(),
+			)
+		}
+	}
+
 	// Build enriched context with workspace/container info
 	toolCtx := ctx
 	if projectID != "" {
@@ -187,7 +198,20 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 		resp, err := aiProvider.Chat(ctx, messages, toolDefs)
 		if err != nil {
-			return nil, fmt.Errorf("agent_execute step %q: iteration %d: %w", s.name, iterCount, err)
+			// Don't abort the pipeline — return a failed result so the task can be marked.
+			errMsg := fmt.Sprintf("LLM call failed at iteration %d: %v", iterCount, err)
+			if s.app != nil {
+				if logger := s.app.Logger(); logger != nil {
+					logger.Error("agent_execute: chat failed", "agent", agentName, "iteration", iterCount, "error", err)
+				}
+			}
+			output := map[string]any{
+				"result":     errMsg,
+				"status":     "failed",
+				"iterations": iterCount,
+				"error":      errMsg,
+			}
+			return &module.StepResult{Output: output}, nil
 		}
 
 		finalContent = resp.Content
