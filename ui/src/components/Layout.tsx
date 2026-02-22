@@ -7,8 +7,9 @@ import TaskList from './TaskList';
 import MessageFeed from './MessageFeed';
 import Settings from './Settings';
 import ProjectList from './ProjectList';
+import SkillList from './SkillList';
 
-type NavItem = 'dashboard' | 'agents' | 'tasks' | 'messages' | 'projects' | 'settings';
+type NavItem = 'dashboard' | 'agents' | 'tasks' | 'messages' | 'projects' | 'skills' | 'settings';
 
 const navItems: { id: NavItem; label: string; icon: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: '[D]' },
@@ -16,6 +17,7 @@ const navItems: { id: NavItem; label: string; icon: string }[] = [
   { id: 'tasks', label: 'Tasks', icon: '[T]' },
   { id: 'messages', label: 'Messages', icon: '[M]' },
   { id: 'projects', label: 'Projects', icon: '[P]' },
+  { id: 'skills', label: 'Skills', icon: '[K]' },
   { id: 'settings', label: 'Settings', icon: '[S]' },
 ];
 
@@ -30,6 +32,7 @@ export default function Layout() {
       case 'tasks': return <TaskList />;
       case 'messages': return <MessageFeed />;
       case 'projects': return <ProjectList />;
+      case 'skills': return <SkillList />;
       case 'settings': return <Settings />;
     }
   }

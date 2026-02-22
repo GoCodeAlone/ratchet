@@ -141,6 +141,62 @@ CREATE TABLE IF NOT EXISTS llm_providers (
     updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );`
 
+const createToolPoliciesTable = `
+CREATE TABLE IF NOT EXISTS tool_policies (
+    id TEXT PRIMARY KEY,
+    scope TEXT NOT NULL DEFAULT 'global',
+    scope_id TEXT NOT NULL DEFAULT '',
+    tool_pattern TEXT NOT NULL,
+    action TEXT NOT NULL DEFAULT 'allow',
+    created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);`
+
+const createApprovalsTable = `
+CREATE TABLE IF NOT EXISTS approvals (
+    id TEXT PRIMARY KEY,
+    agent_id TEXT NOT NULL DEFAULT '',
+    task_id TEXT NOT NULL DEFAULT '',
+    action TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    details TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    reviewer_comment TEXT NOT NULL DEFAULT '',
+    timeout_minutes INTEGER NOT NULL DEFAULT 30,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    resolved_at DATETIME
+);`
+
+const createSkillsTable = `
+CREATE TABLE IF NOT EXISTS skills (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    required_tools TEXT NOT NULL DEFAULT '[]',
+    created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);`
+
+const createAgentSkillsTable = `
+CREATE TABLE IF NOT EXISTS agent_skills (
+    agent_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (agent_id, skill_id)
+);`
+
+const createWebhooksTable = `
+CREATE TABLE IF NOT EXISTS webhooks (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL DEFAULT 'generic',
+    name TEXT NOT NULL,
+    secret_name TEXT NOT NULL DEFAULT '',
+    filter TEXT NOT NULL DEFAULT '',
+    task_template TEXT NOT NULL DEFAULT '',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);`
+
 // dbInitHook creates a WiringHook that initialises the ratchet database tables
 // and seeds agents from the YAML config.
 func dbInitHook() plugin.WiringHook {
@@ -178,11 +234,18 @@ func dbInitHook() plugin.WiringHook {
 			db.SetMaxOpenConns(1)
 
 			// Create tables
-			for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable, createProjectReposTable, createWorkspaceContainersTable, createLLMProvidersTable} {
+			for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable, createProjectReposTable, createWorkspaceContainersTable, createLLMProvidersTable, createToolPoliciesTable, createApprovalsTable, createSkillsTable, createAgentSkillsTable, createWebhooksTable} {
 				if _, err := db.Exec(ddl); err != nil {
 					return fmt.Errorf("ratchet.db_init: create table: %w", err)
 				}
 			}
+
+			// Initialize memory tables (FTS5 + triggers managed by MemoryStore)
+			ms := NewMemoryStore(db)
+			if err := ms.InitTables(); err != nil {
+				return fmt.Errorf("ratchet.db_init: memory tables: %w", err)
+			}
+			_ = app.RegisterService("ratchet-memory-store", ms)
 
 			// Seed default mock provider if none exist
 			var providerCount int
@@ -196,6 +259,10 @@ func dbInitHook() plugin.WiringHook {
 
 			// Add workspace_spec column to projects if missing (for existing databases)
 			_, _ = db.Exec("ALTER TABLE projects ADD COLUMN workspace_spec TEXT NOT NULL DEFAULT '{}'")
+
+			// Add ephemeral sub-agent columns if missing (for existing databases)
+			_, _ = db.Exec("ALTER TABLE agents ADD COLUMN is_ephemeral INTEGER NOT NULL DEFAULT 0")
+			_, _ = db.Exec("ALTER TABLE agents ADD COLUMN parent_agent_id TEXT NOT NULL DEFAULT ''")
 
 			// Migrate seeded agents from hardcoded 'mock' provider to '' (use default)
 			_, _ = db.Exec("UPDATE agents SET provider = '' WHERE provider = 'mock'")

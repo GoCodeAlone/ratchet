@@ -2,8 +2,8 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { useProviderStore } from '../store/providerStore';
 import { colors, statusColors, baseStyles } from '../theme';
-import { AgentInfo, AgentStatus, TranscriptEntry } from '../types';
-import { createAgent, updateAgent, deleteAgent, fetchAgentTranscripts } from '../utils/api';
+import { AgentInfo, AgentStatus, TranscriptEntry, Skill } from '../types';
+import { createAgent, updateAgent, deleteAgent, fetchAgentTranscripts, fetchAgentSkills, fetchSkills, assignSkillToAgent, removeSkillFromAgent } from '../utils/api';
 
 function StatusBadge({ status }: { status: AgentStatus }) {
   const color = statusColors[status] ?? colors.overlay0;
@@ -143,6 +143,167 @@ function AgentModal({ onClose, onSubmit, agent }: {
   );
 }
 
+function AgentSkillsPanel({ agentId }: { agentId: string }) {
+  const [agentSkills, setAgentSkills] = useState<Skill[]>([]);
+  const [allSkills, setAllSkills] = useState<Skill[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showAssign, setShowAssign] = useState(false);
+
+  async function loadSkills() {
+    setLoading(true);
+    try {
+      const [assigned, all] = await Promise.all([
+        fetchAgentSkills(agentId),
+        fetchSkills(),
+      ]);
+      setAgentSkills(assigned ?? []);
+      setAllSkills(all ?? []);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadSkills();
+  }, [agentId]);
+
+  async function handleAssign(skillId: string) {
+    setActionLoading(skillId);
+    try {
+      await assignSkillToAgent(agentId, skillId);
+      await loadSkills();
+      setShowAssign(false);
+    } catch {
+      // ignore
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleRemove(skillId: string) {
+    setActionLoading(skillId + '-remove');
+    try {
+      await removeSkillFromAgent(agentId, skillId);
+      await loadSkills();
+    } catch {
+      // ignore
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  const assignedIds = new Set(agentSkills.map((s) => s.id));
+  const unassigned = allSkills.filter((s) => !assignedIds.has(s.id));
+
+  return (
+    <div style={{ marginTop: '16px', borderTop: `1px solid ${colors.surface1}`, paddingTop: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <div style={{ fontSize: '12px', fontWeight: '600', color: colors.subtext0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Skills ({agentSkills.length})
+        </div>
+        {unassigned.length > 0 && (
+          <button
+            onClick={() => setShowAssign(!showAssign)}
+            style={{ ...baseStyles.button.secondary, fontSize: '11px', padding: '3px 10px' }}
+          >
+            {showAssign ? 'Cancel' : '+ Assign'}
+          </button>
+        )}
+      </div>
+
+      {loading ? (
+        <div style={{ color: colors.overlay0, fontSize: '13px' }}>Loading...</div>
+      ) : (
+        <>
+          {agentSkills.length === 0 && !showAssign ? (
+            <div style={{ color: colors.overlay0, fontSize: '13px' }}>No skills assigned.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {agentSkills.map((skill) => (
+                <div
+                  key={skill.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '6px 10px',
+                    backgroundColor: colors.mantle,
+                    borderRadius: '6px',
+                    borderLeft: `2px solid ${colors.teal}`,
+                  }}
+                >
+                  <div>
+                    <span style={{ fontSize: '13px', color: colors.text, fontWeight: '500' }}>{skill.name}</span>
+                    {skill.category && (
+                      <span style={{ fontSize: '11px', color: colors.teal, marginLeft: '8px' }}>{skill.category}</span>
+                    )}
+                    {skill.description && (
+                      <div style={{ fontSize: '12px', color: colors.subtext0, marginTop: '2px' }}>{skill.description}</div>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRemove(skill.id)}
+                    disabled={actionLoading === skill.id + '-remove'}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: colors.red,
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      padding: '2px 6px',
+                      opacity: actionLoading === skill.id + '-remove' ? 0.5 : 1,
+                    }}
+                    title="Remove skill"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showAssign && unassigned.length > 0 && (
+            <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ fontSize: '12px', color: colors.subtext0, marginBottom: '4px' }}>Available skills:</div>
+              {unassigned.map((skill) => (
+                <div
+                  key={skill.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '6px 10px',
+                    backgroundColor: colors.mantle,
+                    borderRadius: '6px',
+                    opacity: actionLoading === skill.id ? 0.6 : 1,
+                  }}
+                >
+                  <div>
+                    <span style={{ fontSize: '13px', color: colors.subtext1 }}>{skill.name}</span>
+                    {skill.category && (
+                      <span style={{ fontSize: '11px', color: colors.overlay1, marginLeft: '8px' }}>{skill.category}</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleAssign(skill.id)}
+                    disabled={!!actionLoading}
+                    style={{ ...baseStyles.button.primary, fontSize: '11px', padding: '3px 10px' }}
+                  >
+                    Assign
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () => void }) {
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
   const [transcriptsLoading, setTranscriptsLoading] = useState(false);
@@ -230,6 +391,9 @@ function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () =>
           </div>
         )}
       </div>
+
+      {/* Skills section */}
+      <AgentSkillsPanel agentId={agent.id} />
 
       {/* Transcripts section */}
       <div style={{ marginTop: '16px', borderTop: `1px solid ${colors.surface1}`, paddingTop: '16px' }}>

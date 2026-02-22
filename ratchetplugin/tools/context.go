@@ -12,6 +12,10 @@ const (
 	ContextKeyContainerID
 	// ContextKeyProjectID carries the current project ID.
 	ContextKeyProjectID
+	// ContextKeyAgentID carries the ID of the currently executing agent.
+	ContextKeyAgentID
+	// ContextKeyTaskID carries the ID of the current task.
+	ContextKeyTaskID
 )
 
 // WorkspacePathFromContext returns the workspace path from context, if set.
@@ -45,4 +49,26 @@ func WithContainerID(ctx context.Context, id string) context.Context {
 // WithProjectID returns a context with the project ID set.
 func WithProjectID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, ContextKeyProjectID, id)
+}
+
+// AgentIDFromContext returns the agent ID from context, if set.
+func AgentIDFromContext(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(ContextKeyAgentID).(string)
+	return v, ok && v != ""
+}
+
+// WithAgentID returns a context with the agent ID set.
+func WithAgentID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, ContextKeyAgentID, id)
+}
+
+// WithTaskID returns a context with the task ID set.
+func WithTaskID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, ContextKeyTaskID, id)
+}
+
+// TaskIDFromContext returns the task ID from context, if set.
+func TaskIDFromContext(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(ContextKeyTaskID).(string)
+	return v, ok && v != ""
 }

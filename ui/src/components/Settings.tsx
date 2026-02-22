@@ -4,6 +4,7 @@ import { apiGet } from '../utils/api';
 import ProviderList from './ProviderList';
 import VaultSettings from './VaultSettings';
 import McpServerList from './McpServerList';
+import WebhookList from './WebhookList';
 
 interface ServerInfo {
   version: string;
@@ -143,6 +144,9 @@ export default function Settings() {
 
       {/* MCP Servers */}
       <McpServerList />
+
+      {/* Webhooks */}
+      <WebhookList />
     </div>
   );
 }

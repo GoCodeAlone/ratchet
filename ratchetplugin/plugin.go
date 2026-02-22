@@ -42,8 +42,8 @@ func New() *RatchetPlugin {
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange"},
-				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager", "ratchet.provider_registry"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit"},
+				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager", "ratchet.provider_registry", "ratchet.approval_manager", "ratchet.webhook_manager", "ratchet.security_auditor"},
 			},
 		},
 	}
@@ -77,6 +77,9 @@ func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 		"step.provider_models":   newProviderModelsFactory(),
 		"step.mcp_reload":        newMCPReloadFactory(),
 		"step.oauth_exchange":    newOAuthExchangeFactory(),
+		"step.approval_resolve":  newApprovalResolveFactory(),
+		"step.webhook_process":   newWebhookProcessStepFactory(),
+		"step.security_audit":   newSecurityAuditFactory(),
 	}
 }
 
@@ -87,9 +90,16 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 		authTokenHook(),
 		secretsGuardHook(),
 		providerRegistryHook(),
+		toolPolicyEngineHook(),
+		subAgentManagerHook(),
 		toolRegistryHook(),
 		containerManagerHook(),
 		transcriptRecorderHook(),
+		skillManagerHook(),
+		approvalManagerHook(),
+		webhookManagerHook(),
+		securityAuditorHook(),
+		browserManagerHook(),
 	}
 }
 
@@ -241,6 +251,13 @@ func toolRegistryHook() plugin.WiringHook {
 				}
 			}
 
+			// Wire policy engine if available
+			if svc, ok := app.SvcRegistry()["ratchet-tool-policy-engine"]; ok {
+				if pe, ok := svc.(*ToolPolicyEngine); ok {
+					registry.SetPolicyEngine(pe)
+				}
+			}
+
 			// Register built-in file and shell tools
 			registry.Register(&tools.FileReadTool{})
 			registry.Register(&tools.FileWriteTool{})
@@ -259,6 +276,35 @@ func toolRegistryHook() plugin.WiringHook {
 				registry.Register(&tools.TaskCreateTool{DB: db})
 				registry.Register(&tools.TaskUpdateTool{DB: db})
 				registry.Register(&tools.MessageSendTool{DB: db})
+				registry.Register(&tools.RequestApprovalTool{DB: db})
+			}
+
+			// Register sub-agent tools if sub-agent manager is available
+			if svc, ok := app.SvcRegistry()["ratchet-sub-agent-manager"]; ok {
+				if mgr, ok := svc.(tools.SubAgentSpawner); ok {
+					registry.Register(&tools.AgentSpawnTool{Manager: mgr})
+					registry.Register(&tools.AgentCheckTool{Manager: mgr})
+					registry.Register(&tools.AgentWaitTool{Manager: mgr})
+				}
+			}
+
+			// Register memory tools if memory store is available
+			if svc, ok := app.SvcRegistry()["ratchet-memory-store"]; ok {
+				if ms, ok := svc.(*MemoryStore); ok {
+					registry.Register(&tools.MemorySearchTool{Store: ms})
+					registry.Register(&tools.MemorySaveTool{Store: ms})
+				}
+			}
+
+			// Register browser tools if browser manager is available
+			if svc, ok := app.SvcRegistry()["ratchet-browser-manager"]; ok {
+				if bm, ok := svc.(*BrowserManager); ok {
+					registry.Register(&tools.BrowserNavigateTool{Manager: bm})
+					registry.Register(&tools.BrowserScreenshotTool{Manager: bm})
+					registry.Register(&tools.BrowserClickTool{Manager: bm})
+					registry.Register(&tools.BrowserExtractTool{Manager: bm})
+					registry.Register(&tools.BrowserFillTool{Manager: bm})
+				}
 			}
 
 			// Register in service registry
@@ -312,6 +358,88 @@ func transcriptRecorderHook() plugin.WiringHook {
 
 			recorder := NewTranscriptRecorder(db, guard)
 			_ = app.RegisterService("ratchet-transcript-recorder", recorder)
+			return nil
+		},
+	}
+}
+
+// approvalManagerHook creates an ApprovalManager and registers it in the service registry.
+func approvalManagerHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.approval_manager",
+		Priority: 74,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			var db *sql.DB
+			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok {
+					db = dbp.DB()
+				}
+			}
+			if db == nil {
+				return nil // no DB, skip
+			}
+
+			am := NewApprovalManager(db)
+
+			// Wire in SSE hub if available (optional, for push notifications)
+			for _, svc := range app.SvcRegistry() {
+				if hub, ok := svc.(*SSEHub); ok {
+					am.SetSSEHub(hub)
+					break
+				}
+			}
+
+			_ = app.RegisterService("ratchet-approval-manager", am)
+			return nil
+		},
+	}
+}
+
+// webhookManagerHook creates a WebhookManager and registers it in the service registry.
+func webhookManagerHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.webhook_manager",
+		Priority: 73,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			var db *sql.DB
+			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok {
+					db = dbp.DB()
+				}
+			}
+			if db == nil {
+				return nil // no DB, skip
+			}
+
+			var guard *SecretGuard
+			if svc, ok := app.SvcRegistry()["ratchet-secret-guard"]; ok {
+				guard, _ = svc.(*SecretGuard)
+			}
+
+			wm := NewWebhookManager(db, guard)
+			_ = app.RegisterService("ratchet-webhook-manager", wm)
+			return nil
+		},
+	}
+}
+
+// subAgentManagerHook creates a SubAgentManager and registers it in the service registry.
+func subAgentManagerHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.sub_agent_manager",
+		Priority: 79,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			var db *sql.DB
+			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok {
+					db = dbp.DB()
+				}
+			}
+			if db == nil {
+				return nil // no DB, skip
+			}
+			mgr := NewSubAgentManager(db)
+			_ = app.RegisterService("ratchet-sub-agent-manager", mgr)
 			return nil
 		},
 	}

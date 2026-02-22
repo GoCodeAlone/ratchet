@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/ratchet/provider"
@@ -12,6 +13,9 @@ import (
 	"github.com/GoCodeAlone/workflow/plugin"
 	"github.com/google/uuid"
 )
+
+// approvalWaitTimeout is the maximum time to wait for human approval.
+const approvalWaitTimeout = 30 * time.Minute
 
 // AgentExecuteStep runs the autonomous agent loop for a single task.
 type AgentExecuteStep struct {
@@ -132,6 +136,9 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 	// Build enriched context with workspace/container info
 	toolCtx := ctx
+	// Inject agent and task IDs so tools like request_approval can retrieve them.
+	toolCtx = tools.WithAgentID(toolCtx, agentID)
+	toolCtx = tools.WithTaskID(toolCtx, taskID)
 	if projectID != "" {
 		toolCtx = tools.WithProjectID(toolCtx, projectID)
 
@@ -185,9 +192,42 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 	var finalContent string
 	iterCount := 0
+	ld := NewLoopDetector()
+	cm := NewContextManager(aiProvider.Name())
 
 	for iterCount < s.maxIterations {
 		iterCount++
+
+		// Context window management: compact if approaching model's token limit.
+		if cm.NeedsCompaction(messages) {
+			estimated, limit := cm.TokenUsage(messages)
+			if s.app != nil {
+				if logger := s.app.Logger(); logger != nil {
+					logger.Info("agent_execute: compacting context",
+						"agent", agentName,
+						"iteration", iterCount,
+						"estimated_tokens", estimated,
+						"limit", limit,
+						"compaction_num", cm.Compactions()+1,
+					)
+				}
+			}
+			messages = cm.Compact(ctx, messages, aiProvider)
+			if recorder != nil {
+				_ = recorder.Record(ctx, TranscriptEntry{
+					ID:        uuid.New().String(),
+					AgentID:   agentID,
+					TaskID:    taskID,
+					ProjectID: projectID,
+					Iteration: iterCount,
+					Role:      provider.RoleUser,
+					Content: fmt.Sprintf(
+						"[SYSTEM] Context window compacted (compaction #%d). Estimated %d tokens of %d limit.",
+						cm.Compactions(), estimated, limit,
+					),
+				})
+			}
+		}
 
 		// Redact secrets from messages before sending to LLM
 		if guard != nil {
@@ -243,16 +283,35 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 		for _, tc := range resp.ToolCalls {
 			var resultStr string
+			var isError bool
 			if toolRegistry != nil {
 				result, execErr := toolRegistry.Execute(toolCtx, tc.Name, tc.Arguments)
 				if execErr != nil {
 					resultStr = fmt.Sprintf("Error: %v", execErr)
+					isError = true
 				} else {
 					resultBytes, _ := json.Marshal(result)
 					resultStr = string(resultBytes)
 				}
 			} else {
 				resultStr = "Tool execution not available"
+				isError = true
+			}
+
+			// Handle approval gates: if the tool was request_approval, pause and wait.
+			if tc.Name == "request_approval" && !isError {
+				if approvalOutput, breakLoop := s.handleApprovalWait(ctx, resultStr, agentName, iterCount); breakLoop {
+					output := map[string]any{
+						"result":     approvalOutput,
+						"status":     "approval_timeout",
+						"iterations": iterCount,
+						"error":      approvalOutput,
+					}
+					return &module.StepResult{Output: output}, nil
+				} else {
+					// Continue: replace resultStr with the resolution message
+					resultStr = approvalOutput
+				}
 			}
 
 			// Redact tool results
@@ -279,6 +338,55 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 					ToolCallID: tc.ID,
 				})
 			}
+
+			// Loop detection: record and check after each tool execution.
+			ld.Record(tc.Name, tc.Arguments, resultStr, isError)
+			loopStatus, loopMsg := ld.Check()
+			switch loopStatus {
+			case LoopStatusWarning:
+				warningContent := fmt.Sprintf("[SYSTEM] Loop warning: %s. Please try a different approach.", loopMsg)
+				messages = append(messages, provider.Message{
+					Role:    provider.RoleUser,
+					Content: warningContent,
+				})
+				if recorder != nil {
+					_ = recorder.Record(ctx, TranscriptEntry{
+						ID:        uuid.New().String(),
+						AgentID:   agentID,
+						TaskID:    taskID,
+						ProjectID: projectID,
+						Iteration: iterCount,
+						Role:      provider.RoleUser,
+						Content:   warningContent,
+					})
+				}
+			case LoopStatusBreak:
+				breakMsg := fmt.Sprintf("Agent loop terminated: %s", loopMsg)
+				if s.app != nil {
+					if logger := s.app.Logger(); logger != nil {
+						logger.Warn("agent_execute: loop detected, breaking",
+							"agent", agentName, "iteration", iterCount, "reason", loopMsg)
+					}
+				}
+				if recorder != nil {
+					_ = recorder.Record(ctx, TranscriptEntry{
+						ID:        uuid.New().String(),
+						AgentID:   agentID,
+						TaskID:    taskID,
+						ProjectID: projectID,
+						Iteration: iterCount,
+						Role:      provider.RoleUser,
+						Content:   "[SYSTEM] " + breakMsg,
+					})
+				}
+				output := map[string]any{
+					"result":     breakMsg,
+					"status":     "loop_detected",
+					"iterations": iterCount,
+					"error":      loopMsg,
+				}
+				return &module.StepResult{Output: output}, nil
+			}
 		}
 	}
 
@@ -289,6 +397,56 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 	}
 
 	return &module.StepResult{Output: output}, nil
+}
+
+// handleApprovalWait parses the request_approval tool result, finds the ApprovalManager,
+// and waits for resolution. Returns (message, breakLoop):
+//   - breakLoop=true means the approval timed out and the loop should stop.
+//   - breakLoop=false means continue with the provided message.
+func (s *AgentExecuteStep) handleApprovalWait(ctx context.Context, toolResult, agentName string, iterCount int) (string, bool) {
+	// Parse the approval ID from the tool result JSON
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(toolResult), &parsed); err != nil {
+		return toolResult, false // not parseable, just continue
+	}
+	approvalID, _ := parsed["approval_id"].(string)
+	if approvalID == "" {
+		return toolResult, false // no approval ID, just continue
+	}
+
+	// Lazy-lookup ApprovalManager
+	var am *ApprovalManager
+	if svc, ok := s.app.SvcRegistry()["ratchet-approval-manager"]; ok {
+		am, _ = svc.(*ApprovalManager)
+	}
+	if am == nil {
+		// No manager available — just continue without blocking
+		return toolResult, false
+	}
+
+	if s.app != nil {
+		if logger := s.app.Logger(); logger != nil {
+			logger.Info("agent_execute: waiting for approval",
+				"agent", agentName, "iteration", iterCount, "approval_id", approvalID)
+		}
+	}
+
+	// Wait up to 30 minutes for resolution
+	approval, err := am.WaitForResolution(ctx, approvalID, approvalWaitTimeout)
+	if err != nil {
+		return fmt.Sprintf("Approval wait error: %v", err), false
+	}
+
+	switch approval.Status {
+	case ApprovalApproved:
+		return fmt.Sprintf("Approval granted. Reviewer comment: %s. You may proceed.", approval.ReviewerComment), false
+	case ApprovalRejected:
+		return fmt.Sprintf("Approval rejected. Reviewer comment: %s. Please reconsider your approach.", approval.ReviewerComment), false
+	case ApprovalTimeout:
+		return "Approval request timed out after waiting. Action was not approved within the timeout period.", true
+	default:
+		return toolResult, false
+	}
 }
 
 // extractString safely pulls a string value from a map.

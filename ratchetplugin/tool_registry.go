@@ -9,16 +9,56 @@ import (
 	"github.com/GoCodeAlone/ratchet/provider"
 )
 
+// policyContextKey is the type for context keys used in policy enforcement.
+type policyContextKey int
+
+const (
+	// ContextKeyAgentID carries the executing agent's ID for policy checks.
+	ContextKeyAgentID policyContextKey = iota
+	// ContextKeyTeamID carries the executing agent's team ID for policy checks.
+	ContextKeyTeamID
+)
+
+// WithAgentID returns a context with the agent ID set for policy enforcement.
+func WithAgentID(ctx context.Context, agentID string) context.Context {
+	return context.WithValue(ctx, ContextKeyAgentID, agentID)
+}
+
+// WithTeamID returns a context with the team ID set for policy enforcement.
+func WithTeamID(ctx context.Context, teamID string) context.Context {
+	return context.WithValue(ctx, ContextKeyTeamID, teamID)
+}
+
+// AgentIDFromContext returns the agent ID from context, if set.
+func AgentIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ContextKeyAgentID).(string)
+	return v
+}
+
+// TeamIDFromContext returns the team ID from context, if set.
+func TeamIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(ContextKeyTeamID).(string)
+	return v
+}
+
 // ToolRegistry merges built-in tools and MCP tools into a unified registry.
 type ToolRegistry struct {
-	mu    sync.RWMutex
-	tools map[string]plugin.Tool
+	mu           sync.RWMutex
+	tools        map[string]plugin.Tool
+	policyEngine *ToolPolicyEngine
 }
 
 func NewToolRegistry() *ToolRegistry {
 	return &ToolRegistry{
 		tools: make(map[string]plugin.Tool),
 	}
+}
+
+// SetPolicyEngine attaches a ToolPolicyEngine for access control enforcement.
+func (tr *ToolRegistry) SetPolicyEngine(engine *ToolPolicyEngine) {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
+	tr.policyEngine = engine
 }
 
 // Register adds a tool to the registry.
@@ -70,13 +110,24 @@ func (tr *ToolRegistry) AllDefs() []provider.ToolDef {
 }
 
 // Execute runs a tool by name with the given arguments.
+// If a policy engine is set, access control is checked before execution.
 func (tr *ToolRegistry) Execute(ctx context.Context, name string, args map[string]any) (any, error) {
 	tr.mu.RLock()
 	t, ok := tr.tools[name]
+	pe := tr.policyEngine
 	tr.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("tool %q not found in registry", name)
 	}
+
+	if pe != nil {
+		agentID := AgentIDFromContext(ctx)
+		teamID := TeamIDFromContext(ctx)
+		if allowed, reason := pe.IsAllowed(ctx, name, agentID, teamID); !allowed {
+			return nil, fmt.Errorf("tool %q denied by policy: %s", name, reason)
+		}
+	}
+
 	return t.Execute(ctx, args)
 }
 

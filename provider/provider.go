@@ -68,3 +68,14 @@ type Provider interface {
 	// The channel is closed when the response is complete or an error occurs.
 	Stream(ctx context.Context, messages []Message, tools []ToolDef) (<-chan StreamEvent, error)
 }
+
+// Embedder is optionally implemented by providers that support text embedding.
+type Embedder interface {
+	Embed(ctx context.Context, text string) ([]float32, error)
+}
+
+// AsEmbedder checks if a Provider also implements Embedder.
+func AsEmbedder(p Provider) (Embedder, bool) {
+	e, ok := p.(Embedder)
+	return e, ok
+}

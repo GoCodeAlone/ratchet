@@ -1,4 +1,4 @@
-import type { Project, TranscriptEntry, AgentInfo, Task, ProjectRepo, ContainerStatus, WorkspaceSpec, LLMProvider, ProviderTestResult } from '../types';
+import type { Project, TranscriptEntry, AgentInfo, Task, ProjectRepo, ContainerStatus, WorkspaceSpec, LLMProvider, ProviderTestResult, Skill } from '../types';
 
 const API_BASE = '/api';
 
@@ -155,3 +155,11 @@ export const updateMcpServer = (id: string, data: Partial<MCPServer>) =>
   apiPatch<MCPServer>(`/mcp-servers/${id}`, data);
 export const deleteMcpServer = (id: string) => apiDelete<void>(`/mcp-servers/${id}`);
 export const reloadMcpServers = () => apiPost<{ success: boolean; reloaded: number; errors?: string[] }>('/mcp-servers/reload');
+
+// Skills
+export const fetchSkills = () => apiGet<Skill[]>('/skills');
+export const fetchAgentSkills = (agentId: string) => apiGet<Skill[]>(`/agents/${agentId}/skills`);
+export const assignSkillToAgent = (agentId: string, skillId: string) =>
+  apiPost<{ assigned: boolean }>(`/agents/${agentId}/skills`, { skill_id: skillId });
+export const removeSkillFromAgent = (agentId: string, skillId: string) =>
+  apiDelete<{ removed: boolean }>(`/agents/${agentId}/skills/${skillId}`);

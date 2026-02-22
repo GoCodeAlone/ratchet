@@ -138,3 +138,13 @@ export interface ProviderTestResult {
   message: string;
   latency_ms?: number;
 }
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  category: string;
+  required_tools: string; // JSON array string from DB
+  created_at: string;
+}

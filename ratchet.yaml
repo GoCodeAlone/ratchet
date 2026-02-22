@@ -1729,6 +1729,186 @@ workflows:
                   sent: true
 
       # ============================================================
+      # WEBHOOK ROUTES
+      # ============================================================
+
+      # List all webhooks (auth required)
+      - method: GET
+        path: "/api/webhooks"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-webhooks
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, source, name, secret_name, filter, task_template, enabled, created_at FROM webhooks ORDER BY created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-webhooks.rows"
+
+      # Create a new webhook (auth required)
+      - method: POST
+        path: "/api/webhooks"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [name]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+                  now: "{{ now }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO webhooks (id, source, name, secret_name, filter, task_template, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ default \"generic\" (index .steps \"parse-request\" \"body\" \"source\") }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"secret_name\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"filter\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"task_template\") }}"
+                  - "{{ .steps.prepare.now }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  source: "{{ default \"generic\" (index .steps \"parse-request\" \"body\" \"source\") }}"
+                  enabled: true
+
+      # Delete a webhook (auth required)
+      - method: DELETE
+        path: "/api/webhooks/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete-webhook
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM webhooks WHERE id = ?"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  deleted: true
+
+      # Receive an inbound webhook (no auth — external services call this)
+      - method: POST
+        path: "/api/webhooks/receive/{source}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [source]
+            - name: process-webhook
+              type: step.webhook_process
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.process-webhook"
+
+
+      # ============================================================
+      # APPROVAL ROUTES (auth required)
+      # ============================================================
+
+      # List pending approvals
+      - method: GET
+        path: "/api/approvals"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-approvals
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, action, reason, details, status, reviewer_comment, timeout_minutes, created_at, resolved_at FROM approvals WHERE status = \'pending\' ORDER BY created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-approvals.rows"
+
+      # Approve a pending approval
+      - method: POST
+        path: "/api/approvals/{id}/approve"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: resolve
+              type: step.approval_resolve
+              config:
+                action: approve
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.resolve"
+
+      # Reject a pending approval
+      - method: POST
+        path: "/api/approvals/{id}/reject"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: resolve
+              type: step.approval_resolve
+              config:
+                action: reject
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.resolve"
+
+      # ============================================================
       # SERVER INFO ROUTE (auth required — used by Settings page)
       # ============================================================
 
@@ -1804,6 +1984,220 @@ workflows:
                   id: "admin"
                   username: "admin"
                   role: "admin"
+
+      # ============================================================
+      # SKILL ROUTES (auth required)
+      # ============================================================
+
+      # List all skills
+      - method: GET
+        path: "/api/skills"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-skills
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, description, content, category, required_tools, created_at FROM skills ORDER BY name ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-skills.rows"
+
+      # Get skills for an agent
+      - method: GET
+        path: "/api/agents/{id}/skills"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-skills
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT s.id, s.name, s.description, s.content, s.category, s.required_tools, s.created_at FROM skills s JOIN agent_skills ags ON s.id = ags.skill_id WHERE ags.agent_id = ? ORDER BY s.name ASC"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-skills.rows"
+
+      # Assign a skill to an agent
+      - method: POST
+        path: "/api/agents/{id}/skills"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [skill_id]
+                source: "steps.parse-request.body"
+            - name: assign
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT OR IGNORE INTO agent_skills (agent_id, skill_id) VALUES (?, ?)"
+                params:
+                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{index .steps \"parse-request\" \"body\" \"skill_id\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  assigned: true
+
+      # Remove a skill from an agent
+      - method: DELETE
+        path: "/api/agents/{id}/skills/{skill_id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id, skill_id]
+            - name: remove
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM agent_skills WHERE agent_id = ? AND skill_id = ?"
+                params:
+                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{index .steps \"parse-request\" \"path_params\" \"skill_id\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  removed: true
+
+      # ============================================================
+      # TOOL POLICY ROUTES (auth required)
+      # ============================================================
+
+      # List all tool policies
+      - method: GET
+        path: "/api/tool-policies"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-policies
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, scope, scope_id, tool_pattern, action, created_at FROM tool_policies ORDER BY created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-policies.rows"
+
+      # Create a tool policy
+      - method: POST
+        path: "/api/tool-policies"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [tool_pattern, action]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO tool_policies (id, scope, scope_id, tool_pattern, action) VALUES (?, ?, ?, ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ default \"global\" (index .steps \"parse-request\" \"body\" \"scope\") }}"
+                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"scope_id\") }}"
+                  - "{{index .steps \"parse-request\" \"body\" \"tool_pattern\"}}"
+                  - "{{index .steps \"parse-request\" \"body\" \"action\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  created: true
+
+      # Delete a tool policy
+      - method: DELETE
+        path: "/api/tool-policies/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM tool_policies WHERE id = ?"
+                params:
+                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  success: true
+
+      # ============================================================
+      # SECURITY AUDIT ROUTES (auth required)
+      # ============================================================
+
+      # Run security audit and return findings report
+      - method: POST
+        path: "/api/security/audit"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: run-audit
+              type: step.security_audit
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.run-audit"
 
 # ============================================================
 # PIPELINES (standalone, not inline — used by triggers)

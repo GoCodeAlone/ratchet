@@ -8,3 +8,4 @@ ui/dist/
 .env
 *.exe
 .playwright-cli/
+qa-screenshots/

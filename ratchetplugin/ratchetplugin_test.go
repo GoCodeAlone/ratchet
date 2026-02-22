@@ -1006,7 +1006,12 @@ func TestPlugin_StepFactories(t *testing.T) {
 	p := New()
 	factories := p.StepFactories()
 
-	expected := []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange"}
+	expected := []string{
+		"step.agent_execute", "step.workspace_init", "step.container_control",
+		"step.secret_manage", "step.provider_test", "step.vault_config",
+		"step.provider_models", "step.mcp_reload", "step.oauth_exchange",
+		"step.approval_resolve", "step.webhook_process", "step.security_audit",
+	}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {
 			t.Errorf("missing step factory: %s", name)
@@ -1021,18 +1026,25 @@ func TestPlugin_WiringHooks(t *testing.T) {
 	p := New()
 	hooks := p.WiringHooks()
 
-	if len(hooks) != 7 {
-		t.Fatalf("expected 7 wiring hooks, got %d", len(hooks))
+	if len(hooks) != 14 {
+		t.Fatalf("expected 14 wiring hooks, got %d", len(hooks))
 	}
 
 	expectedNames := map[string]bool{
-		"ratchet.db_init":             false,
-		"ratchet.auth_token":          false,
-		"ratchet.secrets_guard":       false,
-		"ratchet.provider_registry":   false,
-		"ratchet.tool_registry":       false,
-		"ratchet.container_manager":   false,
-		"ratchet.transcript_recorder": false,
+		"ratchet.db_init":              false,
+		"ratchet.auth_token":           false,
+		"ratchet.secrets_guard":        false,
+		"ratchet.provider_registry":    false,
+		"ratchet.tool_registry":        false,
+		"ratchet.container_manager":    false,
+		"ratchet.transcript_recorder":  false,
+		"ratchet.tool_policy_engine":   false,
+		"ratchet.sub_agent_manager":    false,
+		"ratchet.skill_manager":        false,
+		"ratchet.approval_manager":     false,
+		"ratchet.webhook_manager":      false,
+		"ratchet.security_auditor":     false,
+		"ratchet.browser_manager":      false,
 	}
 	for _, h := range hooks {
 		if _, ok := expectedNames[h.Name]; !ok {
