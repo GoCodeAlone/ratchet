@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/CrisisTextLine/modular"
+	"github.com/GoCodeAlone/ratchet/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 	"github.com/GoCodeAlone/workflow/capability"
 	"github.com/GoCodeAlone/workflow/config"
@@ -490,6 +491,26 @@ func testInteractionHook() plugin.WiringHook {
 				}
 				// Register HTTPSource so step.test_interact can find it
 				_ = app.RegisterService("ratchet-test-http-source", httpSource)
+
+				// Override the default provider in the ProviderRegistry so that
+				// step.agent_execute uses the test provider instead of the seeded
+				// mock provider from the llm_providers table.
+				testProvider := providerMod.Provider()
+				if regSvc, ok := app.SvcRegistry()["ratchet-provider-registry"]; ok {
+					if registry, ok := regSvc.(*ProviderRegistry); ok {
+						// Register a "test" factory that returns our pre-built test provider
+						registry.factories["test"] = func(_ string, _ LLMProviderConfig) (provider.Provider, error) {
+							return testProvider, nil
+						}
+						// Update the default provider row in the DB from "mock" to "test"
+						if registry.db != nil {
+							_, _ = registry.db.Exec(`UPDATE llm_providers SET type = 'test', alias = 'test' WHERE id = 'mock-default'`)
+							registry.InvalidateCache()
+						}
+						app.Logger().Info("test interaction hook: registered test provider factory and updated default provider")
+					}
+				}
+
 				app.Logger().Info("test interaction hook: registered HTTPSource for test provider")
 			}
 			return nil
