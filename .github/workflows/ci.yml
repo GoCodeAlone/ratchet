@@ -12,20 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkout workflow engine
-        uses: actions/checkout@v4
-        with:
-          repository: GoCodeAlone/workflow
-          path: workflow
-
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
-
-      - name: Setup go.mod replace
-        run: |
-          go mod edit -replace github.com/GoCodeAlone/workflow=./workflow
-          go mod tidy
 
       - name: Build
         run: go build ./...

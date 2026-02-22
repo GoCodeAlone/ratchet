@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/CrisisTextLine/modular v1.11.11
-	github.com/GoCodeAlone/workflow v0.0.0
+	github.com/GoCodeAlone/workflow v0.0.0-20260222103015-03a88356eb7b
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/go-rod/rod v0.116.2
 	github.com/google/uuid v1.6.0
@@ -148,5 +148,3 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
-
-replace github.com/GoCodeAlone/workflow => ../workflow
