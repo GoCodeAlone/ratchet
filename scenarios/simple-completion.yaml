@@ -1,0 +1,9 @@
+name: simple-completion
+description: Agent makes one tool call then completes
+steps:
+  - content: "I'll read the project file to understand the structure."
+    tool_calls:
+      - name: file_read
+        arguments:
+          path: "/tmp/test-project/README.md"
+  - content: "The project is a simple Go application. Task complete."

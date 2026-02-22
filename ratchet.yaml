@@ -2300,6 +2300,72 @@ pipelines:
           message: "Agent tick: no active agents or pending tasks"
           level: debug
 
+  # ============================================================
+  # TEST INTERACTION API (only functional when provider is "test" in HTTP mode)
+  # ============================================================
+
+  test_interaction:
+    pipelines:
+      # List all pending test interactions
+      - method: GET
+        path: "/api/test/interactions"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: list-interactions
+              type: step.test_interact
+              config:
+                operation: list_pending
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-interactions"
+
+      # Get a specific pending test interaction with full messages and tools
+      - method: GET
+        path: "/api/test/interactions/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-interaction
+              type: step.test_interact
+              config:
+                operation: get_interaction
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-interaction"
+
+      # Submit a response for a pending test interaction
+      - method: POST
+        path: "/api/test/interactions/{id}/respond"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: submit-response
+              type: step.test_interact
+              config:
+                operation: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.submit-response"
+
 # ============================================================
 # TRIGGERS
 # ============================================================

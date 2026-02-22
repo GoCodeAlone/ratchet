@@ -29,8 +29,10 @@ type AgentSpawnTool struct {
 	Manager SubAgentSpawner
 }
 
-func (t *AgentSpawnTool) Name() string        { return "agent_spawn" }
-func (t *AgentSpawnTool) Description() string { return "Spawn an ephemeral sub-agent to handle a delegated task in parallel" }
+func (t *AgentSpawnTool) Name() string { return "agent_spawn" }
+func (t *AgentSpawnTool) Description() string {
+	return "Spawn an ephemeral sub-agent to handle a delegated task in parallel"
+}
 func (t *AgentSpawnTool) Definition() provider.ToolDef {
 	return provider.ToolDef{
 		Name:        t.Name(),
@@ -135,8 +137,10 @@ type AgentWaitTool struct {
 	Manager SubAgentSpawner
 }
 
-func (t *AgentWaitTool) Name() string        { return "agent_wait" }
-func (t *AgentWaitTool) Description() string { return "Wait for one or more spawned sub-agent tasks to complete" }
+func (t *AgentWaitTool) Name() string { return "agent_wait" }
+func (t *AgentWaitTool) Description() string {
+	return "Wait for one or more spawned sub-agent tasks to complete"
+}
 func (t *AgentWaitTool) Definition() provider.ToolDef {
 	return provider.ToolDef{
 		Name:        t.Name(),

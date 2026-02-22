@@ -149,7 +149,12 @@ func (s *WebhookProcessStep) resolveSecret(ctx context.Context, secretName strin
 
 // createTask inserts a new task record into the database.
 func (s *WebhookProcessStep) createTask(ctx context.Context, title, description, source, webhookID string) (string, error) {
-	var db interface{ ExecContext(context.Context, string, ...any) (interface{ LastInsertId() (int64, error); RowsAffected() (int64, error) }, error) }
+	var db interface {
+		ExecContext(context.Context, string, ...any) (interface {
+			LastInsertId() (int64, error)
+			RowsAffected() (int64, error)
+		}, error)
+	}
 	_ = db
 
 	svc, ok := s.app.SvcRegistry()["ratchet-db"]

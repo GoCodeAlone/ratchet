@@ -13,8 +13,8 @@ import (
 
 func TestLookupContextLimit_KnownModels(t *testing.T) {
 	cases := []struct {
-		name     string
-		wantMin  int // we just check it is at or above this
+		name    string
+		wantMin int // we just check it is at or above this
 	}{
 		{"claude-sonnet-4-5", 200_000},
 		{"claude-opus-4-6", 200_000},

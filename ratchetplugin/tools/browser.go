@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GoCodeAlone/ratchet/provider"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
-	"github.com/GoCodeAlone/ratchet/provider"
 )
 
 // BrowserPageProvider abstracts the BrowserManager to avoid circular imports.
@@ -24,8 +24,10 @@ type BrowserNavigateTool struct {
 	Manager BrowserPageProvider
 }
 
-func (t *BrowserNavigateTool) Name() string        { return "browser_navigate" }
-func (t *BrowserNavigateTool) Description() string { return "Navigate the browser to a URL and return page title and text" }
+func (t *BrowserNavigateTool) Name() string { return "browser_navigate" }
+func (t *BrowserNavigateTool) Description() string {
+	return "Navigate the browser to a URL and return page title and text"
+}
 func (t *BrowserNavigateTool) Definition() provider.ToolDef {
 	return provider.ToolDef{
 		Name:        t.Name(),
@@ -92,8 +94,10 @@ type BrowserScreenshotTool struct {
 	Manager BrowserPageProvider
 }
 
-func (t *BrowserScreenshotTool) Name() string        { return "browser_screenshot" }
-func (t *BrowserScreenshotTool) Description() string { return "Take a screenshot of the current browser page" }
+func (t *BrowserScreenshotTool) Name() string { return "browser_screenshot" }
+func (t *BrowserScreenshotTool) Description() string {
+	return "Take a screenshot of the current browser page"
+}
 func (t *BrowserScreenshotTool) Definition() provider.ToolDef {
 	return provider.ToolDef{
 		Name:        t.Name(),
@@ -127,8 +131,10 @@ type BrowserClickTool struct {
 	Manager BrowserPageProvider
 }
 
-func (t *BrowserClickTool) Name() string        { return "browser_click" }
-func (t *BrowserClickTool) Description() string { return "Click an element on the current browser page by CSS selector" }
+func (t *BrowserClickTool) Name() string { return "browser_click" }
+func (t *BrowserClickTool) Description() string {
+	return "Click an element on the current browser page by CSS selector"
+}
 func (t *BrowserClickTool) Definition() provider.ToolDef {
 	return provider.ToolDef{
 		Name:        t.Name(),
@@ -178,8 +184,10 @@ type BrowserExtractTool struct {
 	Manager BrowserPageProvider
 }
 
-func (t *BrowserExtractTool) Name() string        { return "browser_extract" }
-func (t *BrowserExtractTool) Description() string { return "Extract text and HTML from elements matching a CSS selector" }
+func (t *BrowserExtractTool) Name() string { return "browser_extract" }
+func (t *BrowserExtractTool) Description() string {
+	return "Extract text and HTML from elements matching a CSS selector"
+}
 func (t *BrowserExtractTool) Definition() provider.ToolDef {
 	return provider.ToolDef{
 		Name:        t.Name(),
@@ -233,8 +241,10 @@ type BrowserFillTool struct {
 	Manager BrowserPageProvider
 }
 
-func (t *BrowserFillTool) Name() string        { return "browser_fill" }
-func (t *BrowserFillTool) Description() string { return "Fill an input element on the current browser page" }
+func (t *BrowserFillTool) Name() string { return "browser_fill" }
+func (t *BrowserFillTool) Description() string {
+	return "Fill an input element on the current browser page"
+}
 func (t *BrowserFillTool) Definition() provider.ToolDef {
 	return provider.ToolDef{
 		Name:        t.Name(),

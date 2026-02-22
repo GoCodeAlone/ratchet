@@ -151,9 +151,9 @@ func TestWebhookVerifySignatureGitHub(t *testing.T) {
 	sig := computeHMAC(secret, payload)
 
 	tests := []struct {
-		name    string
-		sig     string
-		want    bool
+		name string
+		sig  string
+		want bool
 	}{
 		{"valid signature", sig, true},
 		{"wrong signature", "sha256=deadbeef", false},
@@ -329,12 +329,12 @@ func TestWebhookRenderTaskTemplate(t *testing.T) {
 	wm := NewWebhookManager(nil, nil)
 
 	tests := []struct {
-		name        string
-		tmpl        string
-		payload     map[string]any
-		wantTitle   string
-		wantDesc    string
-		wantErr     bool
+		name      string
+		tmpl      string
+		payload   map[string]any
+		wantTitle string
+		wantDesc  string
+		wantErr   bool
 	}{
 		{
 			name:      "empty template uses default",

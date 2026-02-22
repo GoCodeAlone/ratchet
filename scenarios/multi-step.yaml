@@ -1,0 +1,20 @@
+name: multi-step
+description: Agent reads, modifies, writes, then completes
+steps:
+  - content: "Let me read the existing file first."
+    tool_calls:
+      - name: file_read
+        arguments:
+          path: "/tmp/test-project/main.go"
+  - content: "I see the issue. Let me write the fix."
+    tool_calls:
+      - name: file_write
+        arguments:
+          path: "/tmp/test-project/main.go"
+          content: "package main\n\nfunc main() {\n\tprintln(\"fixed\")\n}\n"
+  - content: "Let me verify the file was written correctly."
+    tool_calls:
+      - name: file_read
+        arguments:
+          path: "/tmp/test-project/main.go"
+  - content: "The fix has been applied successfully. The file now contains the corrected code."

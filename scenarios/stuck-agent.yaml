@@ -1,0 +1,9 @@
+name: stuck-agent
+description: Agent repeats the same tool call, testing loop detection
+loop: true
+steps:
+  - content: "Let me check the status."
+    tool_calls:
+      - name: file_read
+        arguments:
+          path: "/tmp/test-project/status.txt"

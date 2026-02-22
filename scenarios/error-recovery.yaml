@@ -1,0 +1,14 @@
+name: error-recovery
+description: Agent encounters a tool error and recovers
+steps:
+  - content: "Let me try to read the configuration file."
+    tool_calls:
+      - name: file_read
+        arguments:
+          path: "/nonexistent/config.yaml"
+  - content: "The file doesn't exist. Let me check the project root instead."
+    tool_calls:
+      - name: file_list
+        arguments:
+          path: "/tmp/test-project"
+  - content: "Found the files. The configuration was missing but the project structure is intact. Task complete."

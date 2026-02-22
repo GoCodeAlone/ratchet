@@ -42,8 +42,8 @@ func New() *RatchetPlugin {
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit"},
-				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager", "ratchet.provider_registry", "ratchet.approval_manager", "ratchet.webhook_manager", "ratchet.security_auditor"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact"},
+				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager", "ratchet.provider_registry", "ratchet.approval_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.test_interaction"},
 			},
 		},
 	}
@@ -79,7 +79,8 @@ func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 		"step.oauth_exchange":    newOAuthExchangeFactory(),
 		"step.approval_resolve":  newApprovalResolveFactory(),
 		"step.webhook_process":   newWebhookProcessStepFactory(),
-		"step.security_audit":   newSecurityAuditFactory(),
+		"step.security_audit":    newSecurityAuditFactory(),
+		"step.test_interact":     newTestInteractFactory(),
 	}
 }
 
@@ -100,6 +101,7 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 		webhookManagerHook(),
 		securityAuditorHook(),
 		browserManagerHook(),
+		testInteractionHook(),
 	}
 }
 
@@ -446,6 +448,50 @@ func subAgentManagerHook() plugin.WiringHook {
 			}
 			mgr := NewSubAgentManager(db)
 			_ = app.RegisterService("ratchet-sub-agent-manager", mgr)
+			return nil
+		},
+	}
+}
+
+// testInteractionHook wires the HTTPSource from a test provider into the
+// service registry and connects it to the SSE hub for push notifications.
+// This runs at low priority so all other services are already available.
+func testInteractionHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.test_interaction",
+		Priority: 50,
+		Hook: func(app modular.Application, cfg *config.WorkflowConfig) error {
+			// Find AIProviderModule instances and check for HTTPSource
+			if cfg == nil {
+				return nil
+			}
+			for _, modCfg := range cfg.Modules {
+				if modCfg.Type != "ratchet.ai_provider" {
+					continue
+				}
+				svc, ok := app.SvcRegistry()[modCfg.Name]
+				if !ok {
+					continue
+				}
+				providerMod, ok := svc.(*AIProviderModule)
+				if !ok {
+					continue
+				}
+				httpSource := providerMod.TestHTTPSource()
+				if httpSource == nil {
+					continue
+				}
+				// Wire SSE hub
+				for _, svc := range app.SvcRegistry() {
+					if hub, ok := svc.(*SSEHub); ok {
+						httpSource.SetSSEHub(hub)
+						break
+					}
+				}
+				// Register HTTPSource so step.test_interact can find it
+				_ = app.RegisterService("ratchet-test-http-source", httpSource)
+				app.Logger().Info("test interaction hook: registered HTTPSource for test provider")
+			}
 			return nil
 		},
 	}

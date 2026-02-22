@@ -12,26 +12,26 @@ import (
 // Keys are matched as case-insensitive prefix/substring checks.
 var modelContextLimits = map[string]int{
 	// Anthropic Claude
-	"claude-opus-4":    200_000,
-	"claude-sonnet-4":  200_000,
-	"claude-haiku-4":   200_000,
-	"claude-3-5":       200_000,
-	"claude-3-opus":    200_000,
-	"claude-3-sonnet":  200_000,
-	"claude-3-haiku":   200_000,
-	"claude-2":         100_000,
-	"claude-instant":   100_000,
+	"claude-opus-4":   200_000,
+	"claude-sonnet-4": 200_000,
+	"claude-haiku-4":  200_000,
+	"claude-3-5":      200_000,
+	"claude-3-opus":   200_000,
+	"claude-3-sonnet": 200_000,
+	"claude-3-haiku":  200_000,
+	"claude-2":        100_000,
+	"claude-instant":  100_000,
 	// OpenAI
-	"gpt-4o":           128_000,
-	"gpt-4-turbo":      128_000,
-	"gpt-4-1106":       128_000,
-	"gpt-4-0125":       128_000,
+	"gpt-4o":            128_000,
+	"gpt-4-turbo":       128_000,
+	"gpt-4-1106":        128_000,
+	"gpt-4-0125":        128_000,
 	"gpt-4-32k":         32_768,
-	"gpt-4":              8_192,
+	"gpt-4":             8_192,
 	"gpt-3.5-turbo-16k": 16_385,
-	"gpt-3.5-turbo":      4_096,
-	"o1-preview":       128_000,
-	"o1-mini":          128_000,
+	"gpt-3.5-turbo":     4_096,
+	"o1-preview":        128_000,
+	"o1-mini":           128_000,
 	// Generic / unknown
 	"default": 128_000,
 }
@@ -45,10 +45,10 @@ const compactionThreshold = 0.80
 // ContextManager tracks token usage across a message array and compacts the
 // conversation when it approaches the model's context limit.
 type ContextManager struct {
-	modelName     string
-	contextLimit  int
-	threshold     float64 // fraction of contextLimit that triggers compaction
-	compactions   int     // number of times compaction has occurred
+	modelName    string
+	contextLimit int
+	threshold    float64 // fraction of contextLimit that triggers compaction
+	compactions  int     // number of times compaction has occurred
 }
 
 // NewContextManager creates a ContextManager for the given provider.
