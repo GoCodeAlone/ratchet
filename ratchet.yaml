@@ -2344,6 +2344,15 @@ pipelines:
             - "{{index (index .steps \"execute-agent\") \"result\"}}"
             - "{{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}}"
 
+      # Skip mark-failed after successful completion (jump to log-completion)
+      - name: skip-to-log
+        type: step.conditional
+        config:
+          field: "steps.check-agent-result.next_step"
+          routes:
+            "mark-completed": log-completion
+          default: log-completion
+
       - name: mark-failed
         type: step.db_exec
         config:
