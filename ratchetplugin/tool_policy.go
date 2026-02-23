@@ -102,7 +102,7 @@ func (tpe *ToolPolicyEngine) ListPolicies(ctx context.Context) ([]ToolPolicy, er
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var policies []ToolPolicy
 	for rows.Next() {

@@ -241,7 +241,7 @@ func (m *MCPServerModule) queryRows(ctx context.Context, query string) (any, *js
 	if err != nil {
 		return nil, &jsonRPCError{Code: -32603, Message: err.Error()}
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	cols, _ := rows.Columns()
 	var results []map[string]any

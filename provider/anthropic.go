@@ -136,7 +136,7 @@ func (p *AnthropicProvider) Chat(ctx context.Context, messages []Message, tools 
 	if err != nil {
 		return nil, fmt.Errorf("anthropic: send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -183,7 +183,7 @@ func (p *AnthropicProvider) Stream(ctx context.Context, messages []Message, tool
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("anthropic: API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -277,7 +277,7 @@ func (p *AnthropicProvider) parseResponse(apiResp *anthropicResponse) *Response 
 
 // readSSE parses the SSE stream from the Anthropic API.
 func (p *AnthropicProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	defer close(ch)
 
 	scanner := bufio.NewScanner(body)

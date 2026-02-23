@@ -190,7 +190,7 @@ func (c *ProviderSecurityCheck) Run(ctx context.Context) []AuditFinding {
 	if err != nil {
 		return findings
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var alias, provType, secretName string
@@ -261,7 +261,7 @@ func (c *AgentPermissionCheck) Run(ctx context.Context) []AuditFinding {
 	if err != nil {
 		return findings
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var id, scope, scopeID, pattern string
@@ -474,7 +474,7 @@ func (c *ContainerSecurityCheck) Run(ctx context.Context) []AuditFinding {
 	if err != nil {
 		return findings
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var id, projectID, image, composeFile string
@@ -588,7 +588,7 @@ func (c *MCPServerCheck) Run(ctx context.Context) []AuditFinding {
 	if err != nil {
 		return findings
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	shellCommands := []string{"bash", "sh", "zsh", "fish", "cmd", "powershell", "python", "ruby", "perl", "node"}
 
@@ -658,7 +658,7 @@ func (c *SecretExposureCheck) Run(ctx context.Context) []AuditFinding {
 	if err != nil {
 		return findings
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	exposedIDs := make(map[string]bool) // avoid duplicate findings per transcript
 	count := 0
@@ -714,7 +714,7 @@ func (c *WebhookSecurityCheck) Run(ctx context.Context) []AuditFinding {
 		// Table may not exist yet; not an error.
 		return findings
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var id, name, secretName string

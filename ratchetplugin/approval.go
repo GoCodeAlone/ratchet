@@ -160,7 +160,7 @@ func (am *ApprovalManager) ListPending(ctx context.Context) ([]Approval, error) 
 	if err != nil {
 		return nil, fmt.Errorf("list pending approvals: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var approvals []Approval
 	for rows.Next() {

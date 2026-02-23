@@ -21,7 +21,7 @@ func setupTasksDB(t *testing.T) *sql.DB {
 		t.Fatalf("open db: %v", err)
 	}
 	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS tasks (
 		id TEXT PRIMARY KEY,
@@ -57,7 +57,7 @@ func setupMessagesDB(t *testing.T) *sql.DB {
 		t.Fatalf("open db: %v", err)
 	}
 	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS messages (
 		id TEXT PRIMARY KEY,
@@ -84,7 +84,7 @@ func setupWorkspace(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return dir
 }
 
@@ -644,7 +644,7 @@ func TestWebFetchTool_Execute(t *testing.T) {
 	t.Run("fetch from test server", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain")
-			fmt.Fprint(w, "test response body")
+			_, _ = fmt.Fprint(w, "test response body")
 		}))
 		defer srv.Close()
 

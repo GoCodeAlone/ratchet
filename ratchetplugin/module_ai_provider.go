@@ -29,7 +29,6 @@ type AIProviderModule struct {
 	name       string
 	provider   provider.Provider
 	agents     []AgentSeed
-	logger     modular.Logger
 	httpSource *HTTPSource // non-nil when test provider is in HTTP mode
 }
 

@@ -55,7 +55,7 @@ func TestOpenAIChat(t *testing.T) {
 			Usage: openaiUsage{PromptTokens: 15, CompletionTokens: 8},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -124,7 +124,7 @@ func TestOpenAIChatWithTools(t *testing.T) {
 			Usage: openaiUsage{PromptTokens: 20, CompletionTokens: 15},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -202,7 +202,7 @@ func TestOpenAIChatToolResult(t *testing.T) {
 			Usage: openaiUsage{PromptTokens: 25, CompletionTokens: 10},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -228,7 +228,7 @@ func TestOpenAIChatToolResult(t *testing.T) {
 func TestOpenAIChatAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"error":{"type":"invalid_request_error","message":"Incorrect API key provided"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"type":"invalid_request_error","message":"Incorrect API key provided"}}`)
 	}))
 	defer server.Close()
 
@@ -292,10 +292,10 @@ func TestOpenAIStream(t *testing.T) {
 
 		for _, chunk := range chunks {
 			data, _ := json.Marshal(chunk)
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
 		}
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
 	}))
 	defer server.Close()
@@ -415,10 +415,10 @@ func TestOpenAIStreamWithToolCall(t *testing.T) {
 
 		for _, chunk := range chunks {
 			data, _ := json.Marshal(chunk)
-			fmt.Fprintf(w, "data: %s\n\n", data)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
 			flusher.Flush()
 		}
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
 	}))
 	defer server.Close()

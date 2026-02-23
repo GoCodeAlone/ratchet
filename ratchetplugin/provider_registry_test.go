@@ -67,7 +67,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("create table: %v", err)
 	}
 
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 

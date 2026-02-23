@@ -71,7 +71,7 @@ func (wm *WebhookManager) List(ctx context.Context) ([]Webhook, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanWebhooks(rows)
 }
 
@@ -84,7 +84,7 @@ func (wm *WebhookManager) GetBySource(ctx context.Context, source string) ([]Web
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanWebhooks(rows)
 }
 
@@ -268,15 +268,6 @@ func webhookToMap(wh Webhook) map[string]any {
 		"enabled":       wh.Enabled,
 		"created_at":    wh.CreatedAt.Format(time.RFC3339),
 	}
-}
-
-// webhooksToMaps converts a slice of Webhooks to a slice of maps.
-func webhooksToMaps(whs []Webhook) []map[string]any {
-	result := make([]map[string]any, len(whs))
-	for i, wh := range whs {
-		result[i] = webhookToMap(wh)
-	}
-	return result
 }
 
 // marshalJSON serialises a value to a JSON string (best-effort).

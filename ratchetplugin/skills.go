@@ -124,7 +124,7 @@ func (sm *SkillManager) ListSkills(ctx context.Context) ([]Skill, error) {
 	if err != nil {
 		return nil, fmt.Errorf("skills: list: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var skills []Skill
 	for rows.Next() {
@@ -172,7 +172,7 @@ ORDER BY s.name ASC`, agentID)
 	if err != nil {
 		return nil, fmt.Errorf("skills: get agent skills for %q: %w", agentID, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var skills []Skill
 	for rows.Next() {

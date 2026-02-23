@@ -980,7 +980,7 @@ func TestE2E_ApprovalGate(t *testing.T) {
 	if rows.Next() {
 		_ = rows.Scan(&approvalID)
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	if approvalID != "" {
 		if err := am.Approve(context.Background(), approvalID, "approved for test"); err != nil {

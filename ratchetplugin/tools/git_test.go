@@ -15,7 +15,7 @@ func setupGitRepo(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	t.Cleanup(func() { os.RemoveAll(dir) })
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
 	// init a git repo
 	run := func(args ...string) {
