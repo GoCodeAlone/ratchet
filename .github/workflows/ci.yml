@@ -32,12 +32,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout workflow-ui
+        uses: actions/checkout@v4
+        with:
+          repository: GoCodeAlone/workflow-ui
+          path: ../workflow-ui
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
           cache: 'npm'
           cache-dependency-path: ui/package-lock.json
+
+      - name: Build workflow-ui
+        run: |
+          cd ../workflow-ui
+          npm ci
+          npm run build
 
       - name: Install
         run: cd ui && npm ci
