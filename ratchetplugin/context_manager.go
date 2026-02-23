@@ -171,7 +171,7 @@ func (cm *ContextManager) summarise(
 	// Build a textual transcript for the LLM to summarise.
 	var sb strings.Builder
 	for _, m := range messages {
-		sb.WriteString(fmt.Sprintf("[%s]: %s\n\n", m.Role, m.Content))
+		_, _ = fmt.Fprintf(&sb, "[%s]: %s\n\n", m.Role, m.Content)
 	}
 
 	summaryReq := []provider.Message{

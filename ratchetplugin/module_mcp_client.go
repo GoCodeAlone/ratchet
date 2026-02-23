@@ -101,7 +101,7 @@ func (c *mcpClient) call(method string, params any) (json.RawMessage, error) {
 }
 
 func (c *mcpClient) close() error {
-	c.stdin.Close()
+	_ = c.stdin.Close()
 	return c.cmd.Wait()
 }
 

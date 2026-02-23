@@ -78,7 +78,7 @@ func NewContainerManager(db *sql.DB) *ContainerManager {
 		// Load existing containers into cache
 		rows, err := db.Query("SELECT project_id, container_id FROM workspace_containers WHERE status = 'running'")
 		if err == nil {
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 			for rows.Next() {
 				var pid, cid string
 				if rows.Scan(&pid, &cid) == nil {
@@ -370,7 +370,7 @@ func (cm *ContainerManager) ensureImage(ctx context.Context, img string) error {
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	_, err = io.Copy(io.Discard, reader)
 	return err
 }

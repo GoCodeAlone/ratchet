@@ -153,7 +153,7 @@ WHERE m.id IN (
 	if err != nil {
 		return nil, fmt.Errorf("memory search: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	return scanMemoryRows(rows)
 }
@@ -183,7 +183,7 @@ func (ms *MemoryStore) SearchHybrid(ctx context.Context, agentID, query string, 
 	if err != nil {
 		return nil, fmt.Errorf("memory hybrid search fetch: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var candidates []scoredMemoryEntry
 	for rows.Next() {
@@ -210,7 +210,7 @@ LIMIT ?`,
 		ftsQuery, agentID, limit*3,
 	)
 	if ftsErr == nil {
-		defer ftsRows.Close()
+		defer func() { _ = ftsRows.Close() }()
 		type idScore struct {
 			id    string
 			score float64

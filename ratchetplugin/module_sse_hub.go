@@ -18,7 +18,6 @@ type SSEHub struct {
 	path    string
 	clients map[chan []byte]struct{}
 	mu      sync.RWMutex
-	logger  modular.Logger
 }
 
 // Name implements modular.Module.
