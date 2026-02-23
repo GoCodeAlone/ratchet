@@ -15,9 +15,10 @@ const (
 
 // Message is a single turn in a conversation.
 type Message struct {
-	Role       Role   `json:"role"`
-	Content    string `json:"content"`
-	ToolCallID string `json:"tool_call_id,omitempty"` // for tool results
+	Role       Role       `json:"role"`
+	Content    string     `json:"content"`
+	ToolCallID string     `json:"tool_call_id,omitempty"` // for tool results
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`   // for assistant messages with tool calls
 }
 
 // ToolDef describes a tool the agent can invoke.

@@ -313,8 +313,9 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 		// Execute tool calls and append results
 		messages = append(messages, provider.Message{
-			Role:    provider.RoleAssistant,
-			Content: resp.Content,
+			Role:      provider.RoleAssistant,
+			Content:   resp.Content,
+			ToolCalls: resp.ToolCalls,
 		})
 
 		for _, tc := range resp.ToolCalls {

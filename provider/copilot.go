@@ -100,13 +100,24 @@ type copilotResMsg struct {
 	ToolCalls []copilotResToolCall `json:"tool_calls,omitempty"`
 }
 
+// copilotFunctionCall is the function call structure used in both request and response tool calls.
+type copilotFunctionCall struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
 type copilotResToolCall struct {
-	ID       string `json:"id"`
-	Type     string `json:"type"`
-	Function struct {
-		Name      string `json:"name"`
-		Arguments string `json:"arguments"`
-	} `json:"function"`
+	Index    int                `json:"index"`
+	ID       string             `json:"id"`
+	Type     string             `json:"type"`
+	Function copilotFunctionCall `json:"function"`
+}
+
+// copilotReqToolCall is the serialized form of a tool call in a request message.
+type copilotReqToolCall struct {
+	ID       string             `json:"id"`
+	Type     string             `json:"type"`
+	Function copilotFunctionCall `json:"function"`
 }
 
 type copilotUsage struct {
@@ -147,7 +158,7 @@ func (p *CopilotProvider) Chat(ctx context.Context, messages []Message, tools []
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("copilot: API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("copilot: API error (status %d): %s", resp.StatusCode, truncate(string(body), 200))
 	}
 
 	var apiResp copilotResponse
@@ -184,7 +195,7 @@ func (p *CopilotProvider) Stream(ctx context.Context, messages []Message, tools 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
-		return nil, fmt.Errorf("copilot: API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("copilot: API error (status %d): %s", resp.StatusCode, truncate(string(body), 200))
 	}
 
 	ch := make(chan StreamEvent, 16)
@@ -206,6 +217,25 @@ func (p *CopilotProvider) buildRequest(messages []Message, tools []ToolDef, stre
 		}
 		if msg.Role == RoleTool {
 			cm.ToolCallID = msg.ToolCallID
+		}
+		if msg.Role == RoleAssistant && len(msg.ToolCalls) > 0 {
+			var tcs []copilotReqToolCall
+			for _, tc := range msg.ToolCalls {
+				args := "{}"
+				if tc.Arguments != nil {
+					if b, err := json.Marshal(tc.Arguments); err == nil {
+						args = string(b)
+					}
+				}
+				tcs = append(tcs, copilotReqToolCall{
+					ID:   tc.ID,
+					Type: "function",
+					Function: copilotFunctionCall{Name: tc.Name, Arguments: args},
+				})
+			}
+			if raw, err := json.Marshal(tcs); err == nil {
+				cm.ToolCalls = json.RawMessage(raw)
+			}
 		}
 		req.Messages = append(req.Messages, cm)
 	}
@@ -269,6 +299,8 @@ func (p *CopilotProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 	defer close(ch)
 
 	scanner := bufio.NewScanner(body)
+	// Increase buffer size to handle large tool call argument payloads.
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	// Track tool calls being assembled across deltas
 	type toolCallState struct {
@@ -322,7 +354,7 @@ func (p *CopilotProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 
 		// Tool call deltas
 		for _, tc := range delta.ToolCalls {
-			idx := 0 // default index for tool calls
+			idx := tc.Index
 			state, ok := toolCalls[idx]
 			if !ok {
 				state = &toolCallState{}
@@ -374,6 +406,10 @@ func (p *CopilotProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 				}
 			}
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		ch <- StreamEvent{Type: "error", Error: fmt.Sprintf("stream read error: %s", err.Error())}
 	}
 
 	// If we exit the loop without [DONE], send a done event
