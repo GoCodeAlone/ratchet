@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: GoCodeAlone/workflow-ui
-          path: ../workflow-ui
+          path: workflow-ui-dep
 
       - uses: actions/setup-node@v4
         with:
@@ -47,9 +47,15 @@ jobs:
 
       - name: Build workflow-ui
         run: |
-          cd ../workflow-ui
+          cd workflow-ui-dep
           npm ci
           npm run build
+
+      - name: Link workflow-ui
+        run: |
+          # package-lock.json resolves workflow-ui as ../../workflow-ui relative to ui/
+          # which is ../workflow-ui from the repo root — create a symlink there
+          ln -s "$GITHUB_WORKSPACE/workflow-ui-dep" "$GITHUB_WORKSPACE/../workflow-ui"
 
       - name: Install
         run: cd ui && npm ci
