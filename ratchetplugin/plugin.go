@@ -20,10 +20,6 @@ import (
 )
 
 // RatchetPlugin implements plugin.EnginePlugin.
-// It registers:
-//   - Module factories: ratchet.ai_provider, ratchet.sse_hub, ratchet.mcp_client, ratchet.mcp_server
-//   - Step factories: step.agent_execute, step.workspace_init
-//   - Wiring hooks: ratchet.db_init, ratchet.auth_token, ratchet.secrets_guard, ratchet.tool_registry
 type RatchetPlugin struct {
 	plugin.BaseEnginePlugin
 }
@@ -42,9 +38,9 @@ func New() *RatchetPlugin {
 				Version:     "1.0.0",
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
-				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.mcp_client", "ratchet.mcp_server"},
+				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server"},
 				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact"},
-				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.tool_registry", "ratchet.transcript_recorder", "ratchet.container_manager", "ratchet.provider_registry", "ratchet.approval_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.test_interaction"},
+				WiringHooks: []string{"ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
 			},
 		},
 	}
