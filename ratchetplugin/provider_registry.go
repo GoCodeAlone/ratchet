@@ -249,7 +249,9 @@ func openrouterProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.P
 
 func copilotProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
 	return provider.NewCopilotProvider(provider.CopilotConfig{
-		Token: apiKey,
-		Model: cfg.Model,
+		Token:     apiKey,
+		Model:     cfg.Model,
+		BaseURL:   cfg.BaseURL,
+		MaxTokens: cfg.MaxTokens,
 	}), nil
 }
