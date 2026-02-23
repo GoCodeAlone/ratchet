@@ -149,7 +149,7 @@ func (p *OpenAIProvider) Chat(ctx context.Context, messages []Message, tools []T
 		return nil, fmt.Errorf("openai: %s: %s", apiResp.Error.Type, apiResp.Error.Message)
 	}
 
-	return p.parseResponse(&apiResp), nil
+	return p.parseResponse(&apiResp)
 }
 
 func (p *OpenAIProvider) Stream(ctx context.Context, messages []Message, tools []ToolDef) (<-chan StreamEvent, error) {
@@ -230,7 +230,7 @@ func (p *OpenAIProvider) setHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+p.config.APIKey)
 }
 
-func (p *OpenAIProvider) parseResponse(apiResp *openaiResponse) *Response {
+func (p *OpenAIProvider) parseResponse(apiResp *openaiResponse) (*Response, error) {
 	resp := &Response{
 		Usage: Usage{
 			InputTokens:  apiResp.Usage.PromptTokens,
@@ -239,7 +239,7 @@ func (p *OpenAIProvider) parseResponse(apiResp *openaiResponse) *Response {
 	}
 
 	if len(apiResp.Choices) == 0 {
-		return resp
+		return resp, nil
 	}
 
 	msg := apiResp.Choices[0].Message
@@ -248,7 +248,9 @@ func (p *OpenAIProvider) parseResponse(apiResp *openaiResponse) *Response {
 	for _, tc := range msg.ToolCalls {
 		var args map[string]any
 		if tc.Function.Arguments != "" {
-			_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+				return nil, fmt.Errorf("openai: unmarshal tool call arguments for %q: %w", tc.Function.Name, err)
+			}
 		}
 		resp.ToolCalls = append(resp.ToolCalls, ToolCall{
 			ID:        tc.ID,
@@ -257,7 +259,7 @@ func (p *OpenAIProvider) parseResponse(apiResp *openaiResponse) *Response {
 		})
 	}
 
-	return resp
+	return resp, nil
 }
 
 // openaiStreamDelta is the delta object in a streaming choice.
@@ -317,15 +319,14 @@ func (p *OpenAIProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
-			// Emit any accumulated tool calls
-			for idx := 0; idx < len(pending); idx++ {
-				ptc, ok := pending[idx]
-				if !ok {
-					continue
-				}
+			// Emit any accumulated tool calls; use range to handle sparse/non-sequential indices.
+			for _, ptc := range pending {
 				var args map[string]any
 				if ptc.argsBuf.Len() > 0 {
-					_ = json.Unmarshal([]byte(ptc.argsBuf.String()), &args)
+					if err := json.Unmarshal([]byte(ptc.argsBuf.String()), &args); err != nil {
+						ch <- StreamEvent{Type: "error", Error: fmt.Sprintf("openai: unmarshal tool call arguments for %q: %v", ptc.name, err)}
+						return
+					}
 				}
 				ch <- StreamEvent{
 					Type: "tool_call",
@@ -381,5 +382,9 @@ func (p *OpenAIProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 				ptc.argsBuf.WriteString(tc.Function.Arguments)
 			}
 		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		ch <- StreamEvent{Type: "error", Error: err.Error()}
 	}
 }
