@@ -50,7 +50,7 @@ func TestCopilotChat(t *testing.T) {
 			Usage: copilotUsage{PromptTokens: 15, CompletionTokens: 8, TotalTokens: 23},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -123,7 +123,7 @@ func TestCopilotChatWithTools(t *testing.T) {
 			Usage: copilotUsage{PromptTokens: 20, CompletionTokens: 15},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -199,7 +199,7 @@ func TestCopilotChatToolResult(t *testing.T) {
 			Usage: copilotUsage{PromptTokens: 25, CompletionTokens: 10},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -225,7 +225,7 @@ func TestCopilotChatToolResult(t *testing.T) {
 func TestCopilotChatAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"error":{"type":"authentication_error","message":"invalid token"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"type":"authentication_error","message":"invalid token"}}`)
 	}))
 	defer server.Close()
 
@@ -264,17 +264,17 @@ func TestCopilotStream(t *testing.T) {
 		hello := "Hello"
 		world := " world"
 		events := []string{
-			fmt.Sprintf(`{"id":"chatcmpl-1","choices":[{"index":0,"delta":{"role":"assistant","content":""}}],"usage":{"prompt_tokens":10,"completion_tokens":0}}`),
+			`{"id":"chatcmpl-1","choices":[{"index":0,"delta":{"role":"assistant","content":""}}],"usage":{"prompt_tokens":10,"completion_tokens":0}}`,
 			fmt.Sprintf(`{"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":%q}}]}`, hello),
 			fmt.Sprintf(`{"id":"chatcmpl-1","choices":[{"index":0,"delta":{"content":%q}}]}`, world),
 			`{"id":"chatcmpl-1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":5}}`,
 		}
 
 		for _, e := range events {
-			fmt.Fprintf(w, "data: %s\n\n", e)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", e)
 			flusher.Flush()
 		}
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
 	}))
 	defer server.Close()
@@ -337,10 +337,10 @@ func TestCopilotStreamWithToolCall(t *testing.T) {
 		}
 
 		for _, e := range events {
-			fmt.Fprintf(w, "data: %s\n\n", e)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", e)
 			flusher.Flush()
 		}
-		fmt.Fprint(w, "data: [DONE]\n\n")
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
 	}))
 	defer server.Close()
@@ -449,7 +449,7 @@ func TestCopilotChatNullContent(t *testing.T) {
 			Usage: copilotUsage{PromptTokens: 10, CompletionTokens: 5},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 

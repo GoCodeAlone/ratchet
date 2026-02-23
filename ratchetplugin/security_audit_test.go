@@ -499,9 +499,6 @@ func TestSecurityAuditor_ChecksImplementInterface(t *testing.T) {
 
 	auditor := NewSecurityAuditor(db, app)
 	for _, check := range auditor.checks {
-		// Type assertion to AuditCheck (already guaranteed by the slice type,
-		// but this makes the intent explicit).
-		var _ AuditCheck = check
 		if check.Name() == "" {
 			t.Errorf("check has empty name: %T", check)
 		}

@@ -47,7 +47,7 @@ func TestAnthropicChat(t *testing.T) {
 			Usage: anthropicUsage{InputTokens: 15, OutputTokens: 8},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -104,7 +104,7 @@ func TestAnthropicChatWithTools(t *testing.T) {
 			Usage: anthropicUsage{InputTokens: 20, OutputTokens: 15},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -185,7 +185,7 @@ func TestAnthropicChatToolResult(t *testing.T) {
 			Usage: anthropicUsage{InputTokens: 25, OutputTokens: 10},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -211,7 +211,7 @@ func TestAnthropicChatToolResult(t *testing.T) {
 func TestAnthropicChatAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		fmt.Fprint(w, `{"error":{"type":"authentication_error","message":"invalid x-api-key"}}`)
+		_, _ = fmt.Fprint(w, `{"error":{"type":"authentication_error","message":"invalid x-api-key"}}`)
 	}))
 	defer server.Close()
 
@@ -258,7 +258,7 @@ func TestAnthropicStream(t *testing.T) {
 		}
 
 		for _, e := range events {
-			fmt.Fprintf(w, "data: %s\n\n", e)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", e)
 			flusher.Flush()
 		}
 	}))
@@ -322,7 +322,7 @@ func TestAnthropicStreamWithToolCall(t *testing.T) {
 		}
 
 		for _, e := range events {
-			fmt.Fprintf(w, "data: %s\n\n", e)
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", e)
 			flusher.Flush()
 		}
 	}))

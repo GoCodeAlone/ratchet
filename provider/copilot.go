@@ -139,7 +139,7 @@ func (p *CopilotProvider) Chat(ctx context.Context, messages []Message, tools []
 	if err != nil {
 		return nil, fmt.Errorf("copilot: send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -183,7 +183,7 @@ func (p *CopilotProvider) Stream(ctx context.Context, messages []Message, tools 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("copilot: API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -265,7 +265,7 @@ func (p *CopilotProvider) parseResponse(apiResp *copilotResponse) *Response {
 
 // readSSE parses the SSE stream from the Copilot Chat Completions API.
 func (p *CopilotProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	defer close(ch)
 
 	scanner := bufio.NewScanner(body)

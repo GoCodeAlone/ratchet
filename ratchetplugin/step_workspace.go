@@ -117,7 +117,7 @@ func (s *WorkspaceInitStep) clonePendingRepos(ctx context.Context, projectID, ws
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var repos []repoRow
 	for rows.Next() {

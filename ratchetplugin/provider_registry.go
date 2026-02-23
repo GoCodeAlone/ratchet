@@ -129,7 +129,7 @@ func (r *ProviderRegistry) InvalidateCacheBySecret(secretName string) {
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	r.mu.Lock()
 	defer r.mu.Unlock()

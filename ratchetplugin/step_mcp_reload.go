@@ -89,7 +89,7 @@ func loadMCPServersFromDB(db *sql.DB) ([]mcpServerConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var configs []mcpServerConfig
 	for rows.Next() {

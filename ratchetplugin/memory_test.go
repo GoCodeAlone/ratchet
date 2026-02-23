@@ -15,7 +15,7 @@ func newTestMemoryDB(t *testing.T) *sql.DB {
 		t.Fatalf("open in-memory sqlite: %v", err)
 	}
 	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 

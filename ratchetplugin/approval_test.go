@@ -20,7 +20,7 @@ func setupApprovalDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatalf("create table: %v", err)
 	}
-	t.Cleanup(func() { db.Close() })
+	t.Cleanup(func() { _ = db.Close() })
 	return db
 }
 
