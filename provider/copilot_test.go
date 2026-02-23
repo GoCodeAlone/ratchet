@@ -187,6 +187,21 @@ func TestCopilotChatToolResult(t *testing.T) {
 			t.Error("expected tool result message with tool_call_id")
 		}
 
+		// Verify assistant message includes tool_calls
+		for _, msg := range req.Messages {
+			if msg.Role != "assistant" || msg.ToolCalls == nil {
+				continue
+			}
+			var tcs []copilotReqToolCall
+			if err := json.Unmarshal(msg.ToolCalls, &tcs); err != nil {
+				t.Errorf("decode assistant tool_calls: %v", err)
+				continue
+			}
+			if len(tcs) == 0 || tcs[0].ID != "call_abc" {
+				t.Errorf("expected assistant tool_calls[0].id=call_abc, got %+v", tcs)
+			}
+		}
+
 		content := "The file contains: hello world"
 		resp := copilotResponse{
 			ID: "chatcmpl-789",
@@ -210,7 +225,9 @@ func TestCopilotChatToolResult(t *testing.T) {
 
 	resp, err := p.Chat(context.Background(), []Message{
 		{Role: RoleUser, Content: "Read /tmp/test.txt"},
-		{Role: RoleAssistant, Content: "Let me read that file."},
+		{Role: RoleAssistant, Content: "Let me read that file.", ToolCalls: []ToolCall{
+			{ID: "call_abc", Name: "read_file", Arguments: map[string]any{"path": "/tmp/test.txt"}},
+		}},
 		{Role: RoleTool, Content: "hello world", ToolCallID: "call_abc"},
 	}, nil)
 	if err != nil {
@@ -471,4 +488,172 @@ func TestCopilotChatNullContent(t *testing.T) {
 	if len(resp.ToolCalls) != 1 {
 		t.Fatalf("expected 1 tool call, got %d", len(resp.ToolCalls))
 	}
+}
+
+func TestCopilotStreamMultipleToolCalls(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("expected response writer to support flushing")
+		}
+
+		// Two parallel tool calls with distinct index values.
+		events := []string{
+			`{"id":"chatcmpl-3","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_aaa","type":"function","function":{"name":"get_weather","arguments":""}}]}}]}`,
+			`{"id":"chatcmpl-3","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_bbb","type":"function","function":{"name":"get_time","arguments":""}}]}}]}`,
+			`{"id":"chatcmpl-3","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"","type":"function","function":{"name":"","arguments":"{\"city\":\"London\"}"}}]}}]}`,
+			`{"id":"chatcmpl-3","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"","type":"function","function":{"name":"","arguments":"{\"timezone\":\"UTC\"}"}}]}}]}`,
+			`{"id":"chatcmpl-3","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
+		}
+
+		for _, e := range events {
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", e)
+			flusher.Flush()
+		}
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	p := NewCopilotProvider(CopilotConfig{
+		Token:   "test-token",
+		BaseURL: server.URL,
+	})
+
+	ch, err := p.Stream(context.Background(), []Message{
+		{Role: RoleUser, Content: "Get weather and time"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Stream: %v", err)
+	}
+
+	var toolEvents []StreamEvent
+	for event := range ch {
+		switch event.Type {
+		case "tool_call":
+			toolEvents = append(toolEvents, event)
+		case "error":
+			t.Fatalf("unexpected error: %s", event.Error)
+		}
+	}
+
+	if len(toolEvents) != 2 {
+		t.Fatalf("expected 2 tool call events, got %d", len(toolEvents))
+	}
+
+	calls := make(map[string]StreamEvent)
+	for _, e := range toolEvents {
+		calls[e.Tool.Name] = e
+	}
+
+	weather, ok := calls["get_weather"]
+	if !ok {
+		t.Fatal("expected get_weather tool call")
+	}
+	if weather.Tool.ID != "call_aaa" {
+		t.Errorf("expected get_weather ID call_aaa, got %s", weather.Tool.ID)
+	}
+	if weather.Tool.Arguments["city"] != "London" {
+		t.Errorf("expected city London, got %v", weather.Tool.Arguments["city"])
+	}
+
+	getTime, ok := calls["get_time"]
+	if !ok {
+		t.Fatal("expected get_time tool call")
+	}
+	if getTime.Tool.ID != "call_bbb" {
+		t.Errorf("expected get_time ID call_bbb, got %s", getTime.Tool.ID)
+	}
+	if getTime.Tool.Arguments["timezone"] != "UTC" {
+		t.Errorf("expected timezone UTC, got %v", getTime.Tool.Arguments["timezone"])
+	}
+}
+
+func TestListCopilotModels(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") == "" {
+				t.Error("expected Authorization header")
+			}
+			if r.Header.Get("Copilot-Integration-Id") != copilotIntegrationID {
+				t.Errorf("expected Copilot-Integration-Id=%s, got %s", copilotIntegrationID, r.Header.Get("Copilot-Integration-Id"))
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"gpt-4.1","name":"GPT-4.1"},{"id":"claude-sonnet-4","name":"Claude Sonnet 4"},{"id":"gpt-4o","name":"GPT-4o"}]}`)
+		}))
+		defer server.Close()
+
+		models, err := listCopilotModels(context.Background(), "test-token", server.URL)
+		if err != nil {
+			t.Fatalf("listCopilotModels: %v", err)
+		}
+		if len(models) != 3 {
+			t.Fatalf("expected 3 models, got %d", len(models))
+		}
+		// Verify sorted by ID
+		if models[0].ID != "claude-sonnet-4" {
+			t.Errorf("expected first model claude-sonnet-4, got %s", models[0].ID)
+		}
+		if models[1].ID != "gpt-4.1" {
+			t.Errorf("expected second model gpt-4.1, got %s", models[1].ID)
+		}
+		if models[2].ID != "gpt-4o" {
+			t.Errorf("expected third model gpt-4o, got %s", models[2].ID)
+		}
+		if models[2].Name != "GPT-4o" {
+			t.Errorf("expected name GPT-4o, got %s", models[2].Name)
+		}
+	})
+
+	t.Run("non200_falls_back", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = fmt.Fprint(w, `{"error":"unauthorized"}`)
+		}))
+		defer server.Close()
+
+		models, err := listCopilotModels(context.Background(), "bad-token", server.URL)
+		if err != nil {
+			t.Fatalf("expected no error on non-200, got %v", err)
+		}
+		fallback := copilotFallbackModels()
+		if len(models) != len(fallback) {
+			t.Errorf("expected %d fallback models, got %d", len(fallback), len(models))
+		}
+	})
+
+	t.Run("invalid_json_falls_back", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `not valid json`)
+		}))
+		defer server.Close()
+
+		models, err := listCopilotModels(context.Background(), "test-token", server.URL)
+		if err != nil {
+			t.Fatalf("expected no error on invalid JSON, got %v", err)
+		}
+		fallback := copilotFallbackModels()
+		if len(models) != len(fallback) {
+			t.Errorf("expected %d fallback models, got %d", len(fallback), len(models))
+		}
+	})
+
+	t.Run("empty_data_falls_back", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"data":[]}`)
+		}))
+		defer server.Close()
+
+		models, err := listCopilotModels(context.Background(), "test-token", server.URL)
+		if err != nil {
+			t.Fatalf("expected no error on empty data, got %v", err)
+		}
+		fallback := copilotFallbackModels()
+		if len(models) != len(fallback) {
+			t.Errorf("expected %d fallback models, got %d", len(fallback), len(models))
+		}
+	})
 }
