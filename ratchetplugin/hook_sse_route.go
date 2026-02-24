@@ -1,11 +1,9 @@
 package ratchetplugin
 
 import (
-	"net/http"
-	"reflect"
-
 	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/workflow/config"
+	"github.com/GoCodeAlone/workflow/module"
 	"github.com/GoCodeAlone/workflow/plugin"
 )
 
@@ -28,13 +26,11 @@ func sseRouteRegistrationHook() plugin.WiringHook {
 				return nil // SSE hub not configured, skip
 			}
 
-			// Find the router instance by looking for an object with HandleFunc method
-			var router interface{}
+			// Find the router instance using the HTTPRouter interface
+			var router module.HTTPRouter
 			for _, svc := range app.SvcRegistry() {
-				// Look for service with HandleFunc or Handle method
-				rv := reflect.ValueOf(svc)
-				if rv.MethodByName("HandleFunc").IsValid() {
-					router = svc
+				if r, ok := svc.(module.HTTPRouter); ok {
+					router = r
 					break
 				}
 			}
@@ -43,34 +39,9 @@ func sseRouteRegistrationHook() plugin.WiringHook {
 				return nil
 			}
 
-			// Call HandleFunc using reflection
-			// The router.HandleFunc method signature is likely: HandleFunc(path string, handler http.HandlerFunc, methods ...string)
-			routerValue := reflect.ValueOf(router)
-			handleFuncMethod := routerValue.MethodByName("HandleFunc")
-			if !handleFuncMethod.IsValid() {
-				app.Logger().Warn("HandleFunc method not found on router")
-				return nil
-			}
-
-			// Create the handler function
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				sseHub.ServeHTTP(w, r)
-			})
-
-			// Call HandleFunc with the path, handler, and GET method
-			args := []reflect.Value{
-				reflect.ValueOf(sseHub.Path()),
-				reflect.ValueOf(handler),
-				reflect.ValueOf("GET"),
-			}
-			result := handleFuncMethod.Call(args)
-
-			// Check for errors
-			if len(result) > 0 && !result[len(result)-1].IsNil() {
-				app.Logger().Error("failed to register SSE route", "error", result[len(result)-1].Interface())
-				return nil
-			}
-
+			// Register the SSE hub as a GET route, wrapping it in an HTTPHandlerAdapter
+			// so it satisfies the module.HTTPHandler interface expected by AddRoute.
+			router.AddRoute("GET", sseHub.Path(), module.NewHTTPHandlerAdapter(sseHub))
 			app.Logger().Info("SSE route registered", "path", sseHub.Path())
 			return nil
 		},

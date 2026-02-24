@@ -552,6 +552,7 @@ workflows:
                 body:
                   id: "{{ .steps.prepare.id }}"
                   name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  role: "{{ default \"\" (index .steps \"parse-request\" \"body\" \"role\") }}"
                   status: "idle"
 
       # Delete an agent
