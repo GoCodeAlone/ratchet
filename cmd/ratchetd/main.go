@@ -58,7 +58,6 @@ func main() {
 	engine := workflow.NewStdEngine(app, logger)
 
 	// Load workflow plugins (core primitives)
-	pipelinePlugin := pluginpipeline.New()
 	plugins := []plugin.EnginePlugin{
 		pluginhttp.New(),
 		pluginobs.New(),
@@ -66,7 +65,7 @@ func main() {
 		pluginauth.New(),
 		pluginstorage.New(),
 		pluginapi.New(),
-		pipelinePlugin,
+		pluginpipeline.New(),
 		pluginscheduler.New(),
 	}
 	for _, p := range plugins {
@@ -78,13 +77,6 @@ func main() {
 	// Load the ratchet plugin (custom modules, steps, wiring hooks)
 	if err := engine.LoadPlugin(ratchetplugin.New()); err != nil {
 		log.Fatalf("Failed to load ratchet plugin: %v", err)
-	}
-
-	// Wire the pipeline handler
-	pipelineHandler := pipelinePlugin.PipelineHandler()
-	if pipelineHandler != nil {
-		pipelineHandler.SetStepRegistry(engine.GetStepRegistry())
-		pipelineHandler.SetLogger(logger)
 	}
 
 	// Build engine from config

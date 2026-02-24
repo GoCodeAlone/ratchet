@@ -1,0 +1,16 @@
+apiVersion: v2
+name: ratchet
+description: Autonomous AI agent orchestration platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai
+  - agents
+  - orchestration
+  - autonomous
+home: https://github.com/GoCodeAlone/ratchet
+sources:
+  - https://github.com/GoCodeAlone/ratchet
+maintainers:
+  - name: GoCodeAlone

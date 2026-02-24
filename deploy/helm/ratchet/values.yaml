@@ -1,0 +1,77 @@
+replicaCount: 1
+
+image:
+  repository: ratchet
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  # NOTE: readOnlyRootFilesystem is intentionally omitted — SQLite requires
+  # a writable filesystem for the ./data/ directory.
+
+service:
+  type: ClusterIP
+  port: 9090
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: ratchet.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Ratchet config override (mounted as ConfigMap at /etc/ratchet/ratchet.yaml)
+config:
+  # Inline YAML config (mounted as ConfigMap)
+  inline: ""
+
+# Environment variables passed to the container
+env: {}
+
+# Sensitive values from Kubernetes secrets
+envFromSecret: ""
+
+# SQLite persistence
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 1Gi

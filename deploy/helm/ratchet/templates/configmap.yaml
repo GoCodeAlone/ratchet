@@ -1,0 +1,11 @@
+{{- if .Values.config.inline }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ratchet.fullname" . }}-config
+  labels:
+    {{- include "ratchet.labels" . | nindent 4 }}
+data:
+  ratchet.yaml: |
+    {{- .Values.config.inline | nindent 4 }}
+{{- end }}
