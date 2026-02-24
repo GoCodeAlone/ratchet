@@ -231,10 +231,10 @@ func listCopilotModels(ctx context.Context, apiKey, baseURL string) ([]ModelInfo
 
 func copilotFallbackModels() []ModelInfo {
 	return []ModelInfo{
+		{ID: "claude-sonnet-4", Name: "Claude Sonnet 4"},
+		{ID: "gpt-4.1", Name: "GPT-4.1"},
 		{ID: "gpt-4o", Name: "GPT-4o"},
 		{ID: "gpt-4o-mini", Name: "GPT-4o Mini"},
-		{ID: "gpt-4.1", Name: "GPT-4.1"},
-		{ID: "claude-sonnet-4", Name: "Claude Sonnet 4"},
 		{ID: "o3-mini", Name: "o3-mini"},
 	}
 }

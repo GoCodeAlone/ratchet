@@ -107,16 +107,16 @@ type copilotFunctionCall struct {
 }
 
 type copilotResToolCall struct {
-	Index    int                `json:"index"`
-	ID       string             `json:"id"`
-	Type     string             `json:"type"`
+	Index    int                 `json:"index"`
+	ID       string              `json:"id"`
+	Type     string              `json:"type"`
 	Function copilotFunctionCall `json:"function"`
 }
 
 // copilotReqToolCall is the serialized form of a tool call in a request message.
 type copilotReqToolCall struct {
-	ID       string             `json:"id"`
-	Type     string             `json:"type"`
+	ID       string              `json:"id"`
+	Type     string              `json:"type"`
 	Function copilotFunctionCall `json:"function"`
 }
 
@@ -170,7 +170,7 @@ func (p *CopilotProvider) Chat(ctx context.Context, messages []Message, tools []
 		return nil, fmt.Errorf("copilot: %s: %s", apiResp.Error.Type, apiResp.Error.Message)
 	}
 
-	return p.parseResponse(&apiResp), nil
+	return p.parseResponse(&apiResp)
 }
 
 func (p *CopilotProvider) Stream(ctx context.Context, messages []Message, tools []ToolDef) (<-chan StreamEvent, error) {
@@ -228,8 +228,8 @@ func (p *CopilotProvider) buildRequest(messages []Message, tools []ToolDef, stre
 					}
 				}
 				tcs = append(tcs, copilotReqToolCall{
-					ID:   tc.ID,
-					Type: "function",
+					ID:       tc.ID,
+					Type:     "function",
 					Function: copilotFunctionCall{Name: tc.Name, Arguments: args},
 				})
 			}
@@ -264,7 +264,7 @@ func (p *CopilotProvider) setHeaders(req *http.Request) {
 	req.Header.Set("Copilot-Integration-Id", copilotIntegrationID)
 }
 
-func (p *CopilotProvider) parseResponse(apiResp *copilotResponse) *Response {
+func (p *CopilotProvider) parseResponse(apiResp *copilotResponse) (*Response, error) {
 	resp := &Response{
 		Usage: Usage{
 			InputTokens:  apiResp.Usage.PromptTokens,
@@ -280,7 +280,9 @@ func (p *CopilotProvider) parseResponse(apiResp *copilotResponse) *Response {
 		for _, tc := range choice.Message.ToolCalls {
 			var args map[string]any
 			if tc.Function.Arguments != "" {
-				_ = json.Unmarshal([]byte(tc.Function.Arguments), &args)
+				if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+					return nil, fmt.Errorf("copilot: unmarshal tool call arguments for %q: %w", tc.Function.Name, err)
+				}
 			}
 			resp.ToolCalls = append(resp.ToolCalls, ToolCall{
 				ID:        tc.ID,
@@ -290,7 +292,7 @@ func (p *CopilotProvider) parseResponse(apiResp *copilotResponse) *Response {
 		}
 	}
 
-	return resp
+	return resp, nil
 }
 
 // readSSE parses the SSE stream from the Copilot Chat Completions API.
@@ -365,7 +367,10 @@ func (p *CopilotProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 				if state.id != "" {
 					var args map[string]any
 					if state.args.Len() > 0 {
-						_ = json.Unmarshal([]byte(state.args.String()), &args)
+						if err := json.Unmarshal([]byte(state.args.String()), &args); err != nil {
+							ch <- StreamEvent{Type: "error", Error: fmt.Sprintf("copilot: invalid tool call arguments JSON for tool %q (id %q): %v", state.name, state.id, err)}
+							return
+						}
 					}
 					ch <- StreamEvent{
 						Type: "tool_call",
@@ -392,7 +397,10 @@ func (p *CopilotProvider) readSSE(body io.ReadCloser, ch chan<- StreamEvent) {
 				if state.id != "" {
 					var args map[string]any
 					if state.args.Len() > 0 {
-						_ = json.Unmarshal([]byte(state.args.String()), &args)
+						if err := json.Unmarshal([]byte(state.args.String()), &args); err != nil {
+							ch <- StreamEvent{Type: "error", Error: fmt.Sprintf("copilot: invalid tool call arguments JSON for tool %q (id %q): %v", state.name, state.id, err)}
+							return
+						}
 					}
 					ch <- StreamEvent{
 						Type: "tool_call",
