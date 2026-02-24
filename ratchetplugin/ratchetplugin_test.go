@@ -1027,26 +1027,27 @@ func TestPlugin_WiringHooks(t *testing.T) {
 	p := New()
 	hooks := p.WiringHooks()
 
-	if len(hooks) != 15 {
-		t.Fatalf("expected 15 wiring hooks, got %d", len(hooks))
+	if len(hooks) != 16 {
+		t.Fatalf("expected 16 wiring hooks, got %d", len(hooks))
 	}
 
 	expectedNames := map[string]bool{
-		"ratchet.db_init":             false,
-		"ratchet.auth_token":          false,
-		"ratchet.secrets_guard":       false,
-		"ratchet.provider_registry":   false,
-		"ratchet.tool_registry":       false,
-		"ratchet.container_manager":   false,
-		"ratchet.transcript_recorder": false,
-		"ratchet.tool_policy_engine":  false,
-		"ratchet.sub_agent_manager":   false,
-		"ratchet.skill_manager":       false,
-		"ratchet.approval_manager":    false,
-		"ratchet.webhook_manager":     false,
-		"ratchet.security_auditor":    false,
-		"ratchet.browser_manager":     false,
-		"ratchet.test_interaction":    false,
+		"ratchet.sse_route_registration": false,
+		"ratchet.db_init":                false,
+		"ratchet.auth_token":             false,
+		"ratchet.secrets_guard":          false,
+		"ratchet.provider_registry":      false,
+		"ratchet.tool_registry":          false,
+		"ratchet.container_manager":      false,
+		"ratchet.transcript_recorder":    false,
+		"ratchet.tool_policy_engine":     false,
+		"ratchet.sub_agent_manager":      false,
+		"ratchet.skill_manager":          false,
+		"ratchet.approval_manager":       false,
+		"ratchet.webhook_manager":        false,
+		"ratchet.security_auditor":       false,
+		"ratchet.browser_manager":        false,
+		"ratchet.test_interaction":       false,
 	}
 	for _, h := range hooks {
 		if _, ok := expectedNames[h.Name]; !ok {
