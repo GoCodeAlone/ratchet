@@ -657,3 +657,101 @@ func TestListCopilotModels(t *testing.T) {
 		}
 	})
 }
+
+func TestCopilotChatInvalidToolArgsJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		content := "calling tool"
+		resp := copilotResponse{
+			ID: "chatcmpl-bad",
+			Choices: []copilotChoice{
+				{
+					Index: 0,
+					Message: copilotResMsg{
+						Role:    "assistant",
+						Content: &content,
+						ToolCalls: []copilotResToolCall{
+							{
+								ID:   "call_bad",
+								Type: "function",
+								Function: copilotFunctionCall{
+									Name:      "do_thing",
+									Arguments: `not valid json`,
+								},
+							},
+						},
+					},
+				},
+			},
+			Usage: copilotUsage{PromptTokens: 5, CompletionTokens: 5},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	p := NewCopilotProvider(CopilotConfig{
+		Token:   "test-token",
+		BaseURL: server.URL,
+	})
+
+	_, err := p.Chat(context.Background(), []Message{
+		{Role: RoleUser, Content: "Do thing"},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error for invalid tool arguments JSON")
+	}
+	if !contains(err.Error(), "do_thing") {
+		t.Errorf("expected error to mention tool name, got: %v", err)
+	}
+}
+
+func TestCopilotStreamInvalidToolArgsJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("expected response writer to support flushing")
+		}
+
+		events := []string{
+			`{"id":"chatcmpl-bad","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_bad","type":"function","function":{"name":"do_thing","arguments":""}}]}}]}`,
+			`{"id":"chatcmpl-bad","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"","type":"function","function":{"name":"","arguments":"not valid json"}}]}}]}`,
+			`{"id":"chatcmpl-bad","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`,
+		}
+
+		for _, e := range events {
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", e)
+			flusher.Flush()
+		}
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	p := NewCopilotProvider(CopilotConfig{
+		Token:   "test-token",
+		BaseURL: server.URL,
+	})
+
+	ch, err := p.Stream(context.Background(), []Message{
+		{Role: RoleUser, Content: "Do thing"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Stream: %v", err)
+	}
+
+	var errEvent *StreamEvent
+	for event := range ch {
+		if event.Type == "error" {
+			e := event
+			errEvent = &e
+		}
+	}
+
+	if errEvent == nil {
+		t.Fatal("expected error event for invalid tool arguments JSON")
+	}
+	if !contains(errEvent.Error, "do_thing") {
+		t.Errorf("expected error to mention tool name, got: %s", errEvent.Error)
+	}
+}
