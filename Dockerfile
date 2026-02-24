@@ -13,14 +13,17 @@ ARG NPM_TOKEN
 WORKDIR /build/ui
 
 COPY ui/package.json ui/package-lock.json ui/.npmrc ./
+# Copy pre-built workflow-ui tarball (built from GoCodeAlone/workflow-ui)
+COPY ui/gocodealone-workflow-ui-*.tgz ./
 RUN --mount=type=secret,id=npm_token \
     if [ -f /run/secrets/npm_token ]; then \
       echo "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/npm_token)" >> .npmrc; \
     elif [ -n "$NPM_TOKEN" ]; then \
       echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" >> .npmrc; \
     fi && \
-    npm ci --silent && \
-    sed -i '/^\/\/npm.pkg.github.com\/:_authToken/d' .npmrc
+    npm install --save gocodealone-workflow-ui-*.tgz 2>/dev/null || true && \
+    npm install --silent && \
+    sed -i '/^\/\/npm.pkg.github.com\/:_authToken/d' .npmrc 2>/dev/null || true
 
 COPY ui/ .
 RUN npx vite build
