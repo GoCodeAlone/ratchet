@@ -198,6 +198,25 @@ func (p *OpenAIProvider) buildRequest(messages []Message, tools []ToolDef, strea
 				Content:    msg.Content,
 				ToolCallID: msg.ToolCallID,
 			})
+		case RoleAssistant:
+			om := openaiMessage{
+				Role:    "assistant",
+				Content: msg.Content,
+			}
+			for _, tc := range msg.ToolCalls {
+				args := "{}"
+				if tc.Arguments != nil {
+					if b, err := json.Marshal(tc.Arguments); err == nil {
+						args = string(b)
+					}
+				}
+				om.ToolCalls = append(om.ToolCalls, openaiToolCall{
+					ID:       tc.ID,
+					Type:     "function",
+					Function: openaiToolCallFunc{Name: tc.Name, Arguments: args},
+				})
+			}
+			req.Messages = append(req.Messages, om)
 		default:
 			req.Messages = append(req.Messages, openaiMessage{
 				Role:    string(msg.Role),

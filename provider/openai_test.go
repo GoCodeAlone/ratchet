@@ -225,6 +225,59 @@ func TestOpenAIChatToolResult(t *testing.T) {
 	}
 }
 
+func TestOpenAIChatAssistantToolCallsSerialized(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req openaiRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		// Verify the assistant message includes tool_calls
+		found := false
+		for _, msg := range req.Messages {
+			if msg.Role == "assistant" && len(msg.ToolCalls) == 1 {
+				tc := msg.ToolCalls[0]
+				if tc.ID == "call_abc" && tc.Function.Name == "read_file" {
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Errorf("expected assistant message with tool_calls[0].id=call_abc; messages: %+v", req.Messages)
+		}
+
+		resp := openaiResponse{
+			ID: "chatcmpl-tc",
+			Choices: []openaiChoice{
+				{
+					Message:      openaiMessage{Role: "assistant", Content: "Done."},
+					FinishReason: "stop",
+				},
+			},
+			Usage: openaiUsage{PromptTokens: 20, CompletionTokens: 5},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	p := NewOpenAIProvider(OpenAIConfig{
+		APIKey:  "test-key",
+		BaseURL: server.URL,
+	})
+
+	_, err := p.Chat(context.Background(), []Message{
+		{Role: RoleUser, Content: "Read /tmp/test.txt"},
+		{Role: RoleAssistant, Content: "Let me read that.", ToolCalls: []ToolCall{
+			{ID: "call_abc", Name: "read_file", Arguments: map[string]any{"path": "/tmp/test.txt"}},
+		}},
+		{Role: RoleTool, Content: "file contents", ToolCallID: "call_abc"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+}
+
 func TestOpenAIChatAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

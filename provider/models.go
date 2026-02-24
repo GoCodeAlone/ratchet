@@ -31,9 +31,7 @@ func ListModels(ctx context.Context, providerType, apiKey, baseURL string) ([]Mo
 		}
 		return listOpenAIModels(ctx, apiKey, baseURL)
 	case "copilot":
-		return []ModelInfo{
-			{ID: "copilot-default", Name: "Copilot Default"},
-		}, nil
+		return listCopilotModels(ctx, apiKey, baseURL)
 	case "mock":
 		return []ModelInfo{
 			{ID: "mock-default", Name: "Mock Provider"},
@@ -167,6 +165,78 @@ func listOpenAIModels(ctx context.Context, apiKey, baseURL string) ([]ModelInfo,
 	})
 
 	return models, nil
+}
+
+// listCopilotModels calls the Copilot /models endpoint to retrieve available models.
+// Falls back to a curated list if the API call fails.
+func listCopilotModels(ctx context.Context, apiKey, baseURL string) ([]ModelInfo, error) {
+	if baseURL == "" {
+		baseURL = defaultCopilotBaseURL
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/models", nil)
+	if err != nil {
+		return copilotFallbackModels(), nil
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Copilot-Integration-Id", copilotIntegrationID)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return copilotFallbackModels(), nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return copilotFallbackModels(), nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return copilotFallbackModels(), nil
+	}
+
+	var result struct {
+		Data []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return copilotFallbackModels(), nil
+	}
+
+	var models []ModelInfo
+	for _, m := range result.Data {
+		name := m.Name
+		if name == "" {
+			name = m.ID
+		}
+		models = append(models, ModelInfo{
+			ID:   m.ID,
+			Name: name,
+		})
+	}
+
+	if len(models) == 0 {
+		return copilotFallbackModels(), nil
+	}
+
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].ID < models[j].ID
+	})
+
+	return models, nil
+}
+
+func copilotFallbackModels() []ModelInfo {
+	return []ModelInfo{
+		{ID: "claude-sonnet-4", Name: "Claude Sonnet 4"},
+		{ID: "gpt-4.1", Name: "GPT-4.1"},
+		{ID: "gpt-4o", Name: "GPT-4o"},
+		{ID: "gpt-4o-mini", Name: "GPT-4o Mini"},
+		{ID: "o3-mini", Name: "o3-mini"},
+	}
 }
 
 func truncate(s string, maxLen int) string {
