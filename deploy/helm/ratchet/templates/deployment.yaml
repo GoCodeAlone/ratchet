@@ -6,6 +6,10 @@ metadata:
     {{- include "ratchet.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  # Recreate is required when using ReadWriteOnce PVCs — rolling update would leave the old pod
+  # holding the volume mount while the new pod tries to attach, causing it to get stuck.
+  strategy:
+    type: {{ .Values.updateStrategy | default "Recreate" }}
   selector:
     matchLabels:
       {{- include "ratchet.selectorLabels" . | nindent 6 }}

@@ -69,6 +69,11 @@ env: {}
 # Sensitive values from Kubernetes secrets
 envFromSecret: ""
 
+# Update strategy — Recreate is required for ReadWriteOnce PVCs (SQLite).
+# RollingUpdate would attempt to bind the PVC to a new pod while the old pod
+# still holds it, causing the new pod to get stuck in ContainerCreating.
+updateStrategy: Recreate
+
 # SQLite persistence
 persistence:
   enabled: true
