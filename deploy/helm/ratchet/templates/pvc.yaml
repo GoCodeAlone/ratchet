@@ -5,6 +5,9 @@ metadata:
   name: {{ include "ratchet.fullname" . }}-data
   labels:
     {{- include "ratchet.labels" . | nindent 4 }}
+  annotations:
+    # Prevent helm uninstall from deleting SQLite data
+    helm.sh/resource-policy: keep
 spec:
   accessModes:
     - {{ .Values.persistence.accessMode }}
