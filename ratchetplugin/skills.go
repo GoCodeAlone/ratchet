@@ -14,6 +14,8 @@ import (
 	"github.com/GoCodeAlone/workflow/config"
 	"github.com/GoCodeAlone/workflow/module"
 	"github.com/GoCodeAlone/workflow/plugin"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 )
 
@@ -233,7 +235,7 @@ func parseSkillFile(filename string, data []byte) (*Skill, error) {
 	if name == "" {
 		// Fall back to filename-based name
 		name = strings.ReplaceAll(id, "-", " ")
-		name = strings.Title(name) //nolint:staticcheck
+		name = cases.Title(language.English).String(name)
 	}
 
 	return &Skill{
