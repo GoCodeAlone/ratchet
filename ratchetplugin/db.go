@@ -197,6 +197,32 @@ CREATE TABLE IF NOT EXISTS webhooks (
     created_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );`
 
+const createSchemaVersionTable = `
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);`
+
+// migrations is the ordered list of incremental schema changes applied after
+// the initial table creation. Each entry is identified by a monotonically
+// increasing version number. A migration is skipped if its version is already
+// present in the schema_version table.
+var migrations = []struct {
+	version int
+	sql     string
+}{
+	// v1: add project_id column to tasks
+	{1, "ALTER TABLE tasks ADD COLUMN project_id TEXT NOT NULL DEFAULT ''"},
+	// v2: add workspace_spec column to projects
+	{2, "ALTER TABLE projects ADD COLUMN workspace_spec TEXT NOT NULL DEFAULT '{}'"},
+	// v3: add ephemeral sub-agent columns to agents
+	{3, "ALTER TABLE agents ADD COLUMN is_ephemeral INTEGER NOT NULL DEFAULT 0"},
+	// v4: add parent_agent_id column to agents
+	{4, "ALTER TABLE agents ADD COLUMN parent_agent_id TEXT NOT NULL DEFAULT ''"},
+	// v5: migrate seeded agents from hardcoded 'mock' provider to '' (use default)
+	{5, "UPDATE agents SET provider = '' WHERE provider = 'mock'"},
+}
+
 // dbInitHook creates a WiringHook that initialises the ratchet database tables
 // and seeds agents from the YAML config.
 func dbInitHook() plugin.WiringHook {
@@ -233,11 +259,35 @@ func dbInitHook() plugin.WiringHook {
 			}
 			db.SetMaxOpenConns(1)
 
-			// Create tables
-			for _, ddl := range []string{createAgentsTable, createTasksTable, createMessagesTable, createProjectsTable, createTranscriptsTable, createMCPServersTable, createProjectReposTable, createWorkspaceContainersTable, createLLMProvidersTable, createToolPoliciesTable, createApprovalsTable, createSkillsTable, createAgentSkillsTable, createWebhooksTable} {
+			// Create base tables (all idempotent via IF NOT EXISTS)
+			for _, ddl := range []string{
+				createAgentsTable, createTasksTable, createMessagesTable,
+				createProjectsTable, createTranscriptsTable, createMCPServersTable,
+				createProjectReposTable, createWorkspaceContainersTable,
+				createLLMProvidersTable, createToolPoliciesTable, createApprovalsTable,
+				createSkillsTable, createAgentSkillsTable, createWebhooksTable,
+				createSchemaVersionTable,
+			} {
 				if _, err := db.Exec(ddl); err != nil {
 					return fmt.Errorf("ratchet.db_init: create table: %w", err)
 				}
+			}
+
+			// Apply pending incremental migrations.
+			// Each migration is only executed if its version is not yet recorded
+			// in schema_version, making them safe to run on every boot.
+			for _, m := range migrations {
+				var count int
+				_ = db.QueryRow("SELECT COUNT(*) FROM schema_version WHERE version = ?", m.version).Scan(&count)
+				if count > 0 {
+					continue // already applied
+				}
+				if _, err := db.Exec(m.sql); err != nil {
+					// ALTER TABLE returns an error if the column already exists in some
+					// SQLite builds; treat it as a no-op so we can still record the version.
+					// Any genuine data-corruption error will surface on subsequent queries.
+				}
+				_, _ = db.Exec("INSERT OR IGNORE INTO schema_version (version) VALUES (?)", m.version)
 			}
 
 			// Initialize memory tables (FTS5 + triggers managed by MemoryStore)
@@ -253,19 +303,6 @@ func dbInitHook() plugin.WiringHook {
 			if providerCount == 0 {
 				_, _ = db.Exec(`INSERT OR IGNORE INTO llm_providers (id, alias, type, model, is_default, status) VALUES ('mock-default', 'mock', 'mock', '', 1, 'active')`)
 			}
-
-			// Add project_id column to tasks if missing (for existing databases)
-			_, _ = db.Exec("ALTER TABLE tasks ADD COLUMN project_id TEXT NOT NULL DEFAULT ''")
-
-			// Add workspace_spec column to projects if missing (for existing databases)
-			_, _ = db.Exec("ALTER TABLE projects ADD COLUMN workspace_spec TEXT NOT NULL DEFAULT '{}'")
-
-			// Add ephemeral sub-agent columns if missing (for existing databases)
-			_, _ = db.Exec("ALTER TABLE agents ADD COLUMN is_ephemeral INTEGER NOT NULL DEFAULT 0")
-			_, _ = db.Exec("ALTER TABLE agents ADD COLUMN parent_agent_id TEXT NOT NULL DEFAULT ''")
-
-			// Migrate seeded agents from hardcoded 'mock' provider to '' (use default)
-			_, _ = db.Exec("UPDATE agents SET provider = '' WHERE provider = 'mock'")
 
 			// Seed agents from config modules
 			if cfg == nil {
