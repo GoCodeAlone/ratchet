@@ -36,7 +36,11 @@ type AIProviderModule struct {
 func (m *AIProviderModule) Name() string { return m.name }
 
 // Init registers this module as a named service.
+// Returns an error if the module was constructed with an invalid provider type.
 func (m *AIProviderModule) Init(app modular.Application) error {
+	if ep, ok := m.provider.(*errProvider); ok {
+		return ep.err
+	}
 	return app.RegisterService(m.name, m)
 }
 
@@ -176,8 +180,9 @@ func newAIProviderFactory() plugin.ModuleFactory {
 				p = NewTestProvider(source, opts...)
 			}
 		default:
-			// Fall back to mock for unknown provider types
-			p = &mockProvider{responses: []string{fmt.Sprintf("Provider %q not configured, using stub.", providerType)}}
+			// Unknown provider type — surface the error at Init time instead of silently
+			// degrading to a mock, which would hide misconfiguration in production.
+			p = &errProvider{err: fmt.Errorf("ratchet.ai_provider %q: unrecognized provider type %q (supported: mock, test)", name, providerType)}
 		}
 
 		// Parse agent seeds
@@ -231,4 +236,21 @@ func (m *mockProvider) Stream(ctx context.Context, messages []provider.Message, 
 	ch <- provider.StreamEvent{Type: "done", Usage: &resp.Usage}
 	close(ch)
 	return ch, nil
+}
+
+// errProvider is a sentinel provider that always returns a configuration error.
+// It is used when the factory receives an unrecognized provider type so that
+// AIProviderModule.Init can fail fast rather than silently degrading to a stub.
+type errProvider struct {
+	err error
+}
+
+func (e *errProvider) Name() string { return "error" }
+
+func (e *errProvider) Chat(_ context.Context, _ []provider.Message, _ []provider.ToolDef) (*provider.Response, error) {
+	return nil, e.err
+}
+
+func (e *errProvider) Stream(_ context.Context, _ []provider.Message, _ []provider.ToolDef) (<-chan provider.StreamEvent, error) {
+	return nil, e.err
 }
