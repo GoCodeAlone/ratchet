@@ -282,11 +282,10 @@ func dbInitHook() plugin.WiringHook {
 				if count > 0 {
 					continue // already applied
 				}
-				if _, err := db.Exec(m.sql); err != nil {
-					// ALTER TABLE returns an error if the column already exists in some
-					// SQLite builds; treat it as a no-op so we can still record the version.
-					// Any genuine data-corruption error will surface on subsequent queries.
-				}
+				// ALTER TABLE returns an error if the column already exists in some
+				// SQLite builds; treat it as a no-op so we can still record the version.
+				// Any genuine data-corruption error will surface on subsequent queries.
+				_, _ = db.Exec(m.sql)
 				_, _ = db.Exec("INSERT OR IGNORE INTO schema_version (version) VALUES (?)", m.version)
 			}
 
