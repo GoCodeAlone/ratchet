@@ -86,7 +86,8 @@ func (s *WebhookProcessStep) Execute(ctx context.Context, pc *module.PipelineCon
 		if wh.SecretName != "" {
 			secret := s.resolveSecret(ctx, wh.SecretName)
 			sig := extractSignatureHeader(source, headers)
-			if !wm.VerifySignature(source, secret, rawBody, sig) {
+			timestamp := headers["X-Slack-Request-Timestamp"]
+			if !wm.VerifySignature(source, secret, rawBody, sig, timestamp) {
 				// Signature mismatch — skip this webhook but don't fail the request
 				continue
 			}
