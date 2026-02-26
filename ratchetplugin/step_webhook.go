@@ -86,7 +86,8 @@ func (s *WebhookProcessStep) Execute(ctx context.Context, pc *module.PipelineCon
 		if wh.SecretName != "" {
 			secret := s.resolveSecret(ctx, wh.SecretName)
 			sig := extractSignatureHeader(source, headers)
-			if !wm.VerifySignature(source, secret, rawBody, sig) {
+			timestamp := headers["X-Slack-Request-Timestamp"]
+			if !wm.VerifySignature(source, secret, rawBody, sig, timestamp) {
 				// Signature mismatch — skip this webhook but don't fail the request
 				continue
 			}
@@ -149,14 +150,6 @@ func (s *WebhookProcessStep) resolveSecret(ctx context.Context, secretName strin
 
 // createTask inserts a new task record into the database.
 func (s *WebhookProcessStep) createTask(ctx context.Context, title, description, source, webhookID string) (string, error) {
-	var db interface {
-		ExecContext(context.Context, string, ...any) (interface {
-			LastInsertId() (int64, error)
-			RowsAffected() (int64, error)
-		}, error)
-	}
-	_ = db
-
 	svc, ok := s.app.SvcRegistry()["ratchet-db"]
 	if !ok {
 		return "", fmt.Errorf("database service 'ratchet-db' not found")

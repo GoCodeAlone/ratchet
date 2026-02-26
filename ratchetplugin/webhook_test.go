@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"fmt"
 	"testing"
 	"time"
 
@@ -33,10 +34,12 @@ func computeHMAC(secret string, payload []byte) string {
 	return "sha256=" + hex.EncodeToString(mac.Sum(nil))
 }
 
-// computeSlackHMAC computes v0=<hex> HMAC (using body directly for test simplicity).
-func computeSlackHMAC(secret string, payload []byte) string {
+// computeSlackHMAC computes v0=<hex> HMAC using the correct Slack signing scheme:
+// HMAC-SHA256("v0:<timestamp>:<body>", secret).
+func computeSlackHMAC(secret string, timestamp string, payload []byte) string {
+	baseString := "v0:" + timestamp + ":" + string(payload)
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(payload)
+	mac.Write([]byte(baseString))
 	return "v0=" + hex.EncodeToString(mac.Sum(nil))
 }
 
@@ -161,7 +164,7 @@ func TestWebhookVerifySignatureGitHub(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := wm.VerifySignature("github", secret, payload, tc.sig)
+			got := wm.VerifySignature("github", secret, payload, tc.sig, "")
 			if got != tc.want {
 				t.Errorf("VerifySignature(%q) = %v, want %v", tc.sig, got, tc.want)
 			}
@@ -176,10 +179,10 @@ func TestWebhookVerifySignatureGeneric(t *testing.T) {
 
 	sig := computeHMAC(secret, payload)
 
-	if !wm.VerifySignature("generic", secret, payload, sig) {
+	if !wm.VerifySignature("generic", secret, payload, sig, "") {
 		t.Error("expected signature verification to pass for generic source")
 	}
-	if wm.VerifySignature("generic", secret, payload, "sha256=wrong") {
+	if wm.VerifySignature("generic", secret, payload, "sha256=wrong", "") {
 		t.Error("expected signature verification to fail with wrong sig")
 	}
 }
@@ -189,12 +192,14 @@ func TestWebhookVerifySignatureSlack(t *testing.T) {
 	secret := "slack-signing-secret"
 	payload := []byte(`{"type":"event_callback","event":{"type":"app_mention"}}`)
 
-	sig := computeSlackHMAC(secret, payload)
+	// Use a recent timestamp so replay protection does not reject the request.
+	timestamp := fmt.Sprintf("%d", time.Now().Unix())
+	sig := computeSlackHMAC(secret, timestamp, payload)
 
-	if !wm.VerifySignature("slack", secret, payload, sig) {
+	if !wm.VerifySignature("slack", secret, payload, sig, timestamp) {
 		t.Error("expected slack signature verification to pass")
 	}
-	if wm.VerifySignature("slack", secret, payload, "v0=badsig") {
+	if wm.VerifySignature("slack", secret, payload, "v0=badsig", timestamp) {
 		t.Error("expected slack signature verification to fail with bad sig")
 	}
 }
@@ -204,12 +209,12 @@ func TestWebhookVerifySignatureNoSecret(t *testing.T) {
 	payload := []byte(`{"event":"push"}`)
 
 	// Empty secret should return true (no verification required)
-	if !wm.VerifySignature("github", "", payload, "") {
+	if !wm.VerifySignature("github", "", payload, "", "") {
 		t.Error("expected true when no secret configured")
 	}
 
 	// Non-empty secret with empty sig should return false
-	if wm.VerifySignature("github", "secret", payload, "") {
+	if wm.VerifySignature("github", "secret", payload, "", "") {
 		t.Error("expected false when secret present but no signature provided")
 	}
 }

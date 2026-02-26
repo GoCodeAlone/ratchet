@@ -103,6 +103,10 @@ func scanWebhooks(rows *sql.Rows) ([]Webhook, error) {
 	return result, rows.Err()
 }
 
+// slackMaxTimestampAge is the maximum age of a Slack request timestamp before
+// it is rejected to prevent replay attacks.
+const slackMaxTimestampAge = 5 * time.Minute
+
 // VerifySignature verifies the HMAC signature of a webhook payload.
 // Returns true if the signature matches or if no secret is configured (SecretName is empty).
 //
@@ -110,7 +114,10 @@ func scanWebhooks(rows *sql.Rows) ([]Webhook, error) {
 //   - github:  X-Hub-Signature-256: sha256=<hex>
 //   - slack:   X-Slack-Signature:   v0=<hex>  (message: "v0:<timestamp>:<body>")
 //   - generic: X-Webhook-Signature: sha256=<hex>
-func (wm *WebhookManager) VerifySignature(source string, secret string, payload []byte, signature string) bool {
+//
+// For Slack, timestamp is the value of the X-Slack-Request-Timestamp header and is
+// required to construct the correct base string and enforce replay protection.
+func (wm *WebhookManager) VerifySignature(source string, secret string, payload []byte, signature string, timestamp string) bool {
 	if secret == "" || signature == "" {
 		// No secret configured — accept without verification
 		return secret == ""
@@ -118,13 +125,24 @@ func (wm *WebhookManager) VerifySignature(source string, secret string, payload 
 
 	switch source {
 	case "slack":
-		// Slack format: v0=HMAC-SHA256("v0:timestamp:body", secret)
-		// signature arrives as "v0=<hex>"
+		// Slack requires a valid timestamp to prevent replay attacks.
+		if timestamp == "" {
+			return false
+		}
+		// Parse Unix timestamp and reject requests older than 5 minutes.
+		var tsSeconds int64
+		if _, err := fmt.Sscanf(timestamp, "%d", &tsSeconds); err != nil {
+			return false
+		}
+		requestTime := time.Unix(tsSeconds, 0)
+		if time.Since(requestTime) > slackMaxTimestampAge {
+			return false
+		}
+		// Slack signing: HMAC-SHA256("v0:<timestamp>:<body>", secret), prefix "v0="
+		baseString := fmt.Sprintf("v0:%s:%s", timestamp, string(payload))
 		sig := strings.TrimPrefix(signature, "v0=")
 		mac := hmac.New(sha256.New, []byte(secret))
-		// For testing purposes we accept the body directly; in production
-		// you'd prepend "v0:<timestamp>:" using the X-Slack-Request-Timestamp header.
-		mac.Write(payload)
+		mac.Write([]byte(baseString))
 		expected := hex.EncodeToString(mac.Sum(nil))
 		return hmac.Equal([]byte(sig), []byte(expected))
 
