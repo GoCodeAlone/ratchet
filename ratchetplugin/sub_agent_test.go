@@ -35,7 +35,7 @@ func setupSubAgentDB(t *testing.T) *SubAgentManager {
 		t.Fatalf("seed parent agent: %v", err)
 	}
 
-	return NewSubAgentManager(db)
+	return NewSubAgentManager(db, 0, 0)
 }
 
 func TestSubAgentManager_Spawn(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 )
 
 func TestLoopDetector_EmptyHistory(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	status, msg := ld.Check()
 	if status != LoopStatusOK {
 		t.Errorf("empty history: expected OK, got %v (%s)", status, msg)
@@ -14,7 +14,7 @@ func TestLoopDetector_EmptyHistory(t *testing.T) {
 }
 
 func TestLoopDetector_SingleEntry(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	ld.Record("read_file", map[string]any{"path": "/tmp/foo"}, "contents", false)
 	status, msg := ld.Check()
 	if status != LoopStatusOK {
@@ -23,7 +23,7 @@ func TestLoopDetector_SingleEntry(t *testing.T) {
 }
 
 func TestLoopDetector_DifferentTools_OK(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	ld.Record("read_file", map[string]any{"path": "/tmp/a"}, "data", false)
 	ld.Record("write_file", map[string]any{"path": "/tmp/b"}, "ok", false)
 	ld.Record("list_dir", map[string]any{"path": "/tmp"}, "[]", false)
@@ -36,7 +36,7 @@ func TestLoopDetector_DifferentTools_OK(t *testing.T) {
 // --- Strategy 1: consecutive identical calls ---
 
 func TestLoopDetector_Consecutive_Warning(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	args := map[string]any{"path": "/tmp/foo"}
 	ld.Record("read_file", args, "data", false)
 	ld.Record("read_file", args, "data", false)
@@ -47,7 +47,7 @@ func TestLoopDetector_Consecutive_Warning(t *testing.T) {
 }
 
 func TestLoopDetector_Consecutive_Break(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	args := map[string]any{"path": "/tmp/foo"}
 	ld.Record("read_file", args, "data", false)
 	ld.Record("read_file", args, "data", false)
@@ -59,7 +59,7 @@ func TestLoopDetector_Consecutive_Break(t *testing.T) {
 }
 
 func TestLoopDetector_Consecutive_Reset_By_DifferentTool(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	args := map[string]any{"path": "/tmp/foo"}
 	ld.Record("read_file", args, "data", false)
 	ld.Record("read_file", args, "data", false)
@@ -72,7 +72,7 @@ func TestLoopDetector_Consecutive_Reset_By_DifferentTool(t *testing.T) {
 }
 
 func TestLoopDetector_Consecutive_DifferentArgs_OK(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	ld.Record("read_file", map[string]any{"path": "/tmp/a"}, "data", false)
 	ld.Record("read_file", map[string]any{"path": "/tmp/b"}, "data", false)
 	ld.Record("read_file", map[string]any{"path": "/tmp/c"}, "data", false)
@@ -85,7 +85,7 @@ func TestLoopDetector_Consecutive_DifferentArgs_OK(t *testing.T) {
 // --- Strategy 2: repeated error pattern ---
 
 func TestLoopDetector_RepeatedError_Break(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	args := map[string]any{"path": "/nonexistent"}
 	errMsg := "file not found"
 	ld.Record("read_file", args, errMsg, true)
@@ -97,7 +97,7 @@ func TestLoopDetector_RepeatedError_Break(t *testing.T) {
 }
 
 func TestLoopDetector_RepeatedError_DifferentErrors_OK(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	args := map[string]any{"path": "/nonexistent"}
 	ld.Record("read_file", args, "file not found", true)
 	ld.Record("read_file", args, "permission denied", true)
@@ -109,14 +109,14 @@ func TestLoopDetector_RepeatedError_DifferentErrors_OK(t *testing.T) {
 }
 
 func TestLoopDetector_RepeatedError_NonError_NoBreak(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	args := map[string]any{"path": "/tmp/foo"}
 	ld.Record("read_file", args, "data", false)
 	ld.Record("read_file", args, "data", false)
 	// Third call — consecutive break takes precedence, but also ensure no
 	// false repeated-error trigger when isError=false.
 	// Test with only 2 non-error calls: should be Warning (consecutive), not Break (error).
-	ld2 := NewLoopDetector()
+	ld2 := NewLoopDetector(LoopDetectorConfig{})
 	ld2.Record("read_file", args, "data", false)
 	ld2.Record("read_file", args, "data", false)
 	status, _ := ld2.Check()
@@ -131,7 +131,7 @@ func TestLoopDetector_RepeatedError_NonError_NoBreak(t *testing.T) {
 // --- Strategy 3: alternating A/B/A/B pattern ---
 
 func TestLoopDetector_Alternating_Break(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	argsA := map[string]any{"tool": "a"}
 	argsB := map[string]any{"tool": "b"}
 	// 3 full cycles = 6 entries
@@ -146,7 +146,7 @@ func TestLoopDetector_Alternating_Break(t *testing.T) {
 }
 
 func TestLoopDetector_Alternating_TwoCycles_OK(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	argsA := map[string]any{"tool": "a"}
 	argsB := map[string]any{"tool": "b"}
 	// Only 2 full cycles — should not trigger
@@ -161,7 +161,7 @@ func TestLoopDetector_Alternating_TwoCycles_OK(t *testing.T) {
 }
 
 func TestLoopDetector_Alternating_ThreeToolsNoPattern(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	// A/B/C pattern with distinct results each call — not a 2-tool alternation.
 	// Use a counter to vary results so no-progress doesn't fire.
 	n := 0
@@ -182,7 +182,7 @@ func TestLoopDetector_Alternating_ThreeToolsNoPattern(t *testing.T) {
 // --- Strategy 4: no progress (identical result repeated) ---
 
 func TestLoopDetector_NoProgress_Break(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	args := map[string]any{"query": "SELECT 1"}
 	result := `{"rows":[]}`
 	ld.Record("db_query", args, result, false)
@@ -195,7 +195,7 @@ func TestLoopDetector_NoProgress_Break(t *testing.T) {
 }
 
 func TestLoopDetector_NoProgress_DifferentResults_OK(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	// Each call has different args (e.g. incrementing sequence number), so it is
 	// not considered a repeated identical call even if the tool name is the same.
 	ld.Record("poll", map[string]any{"seq": 1}, `{"status":"pending"}`, false)
@@ -210,7 +210,7 @@ func TestLoopDetector_NoProgress_DifferentResults_OK(t *testing.T) {
 // --- Reset ---
 
 func TestLoopDetector_Reset(t *testing.T) {
-	ld := NewLoopDetector()
+	ld := NewLoopDetector(LoopDetectorConfig{})
 	args := map[string]any{"path": "/tmp/foo"}
 	ld.Record("read_file", args, "data", false)
 	ld.Record("read_file", args, "data", false)

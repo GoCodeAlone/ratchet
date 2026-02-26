@@ -27,6 +27,22 @@ type loopEntry struct {
 	ErrorMsg   string
 }
 
+// LoopDetectorConfig holds configurable thresholds for loop detection.
+type LoopDetectorConfig struct {
+	// MaxConsecutive is the number of identical consecutive tool calls before a loop is detected.
+	// Default: 3.
+	MaxConsecutive int
+	// MaxErrors is the number of times the same tool call can return the same error before a loop is detected.
+	// Default: 2.
+	MaxErrors int
+	// MaxAlternating is the number of A/B alternating cycles before a loop is detected.
+	// Default: 3.
+	MaxAlternating int
+	// MaxNoProgress is the number of identical (same args + same result) non-error calls before a loop is detected.
+	// Default: 3.
+	MaxNoProgress int
+}
+
 // LoopDetector detects agent execution loops using multiple heuristics.
 type LoopDetector struct {
 	maxConsecutive int
@@ -36,13 +52,27 @@ type LoopDetector struct {
 	history        []loopEntry
 }
 
-// NewLoopDetector creates a LoopDetector with default thresholds.
-func NewLoopDetector() *LoopDetector {
+// NewLoopDetector creates a LoopDetector with the given config.
+// Zero values in cfg are replaced with defaults (MaxConsecutive=3, MaxErrors=2,
+// MaxAlternating=3, MaxNoProgress=3).
+func NewLoopDetector(cfg LoopDetectorConfig) *LoopDetector {
+	if cfg.MaxConsecutive <= 0 {
+		cfg.MaxConsecutive = 3
+	}
+	if cfg.MaxErrors <= 0 {
+		cfg.MaxErrors = 2
+	}
+	if cfg.MaxAlternating <= 0 {
+		cfg.MaxAlternating = 3
+	}
+	if cfg.MaxNoProgress <= 0 {
+		cfg.MaxNoProgress = 3
+	}
 	return &LoopDetector{
-		maxConsecutive: 3,
-		maxErrors:      2,
-		maxAlternating: 3,
-		maxNoProgress:  3,
+		maxConsecutive: cfg.MaxConsecutive,
+		maxErrors:      cfg.MaxErrors,
+		maxAlternating: cfg.MaxAlternating,
+		maxNoProgress:  cfg.MaxNoProgress,
 	}
 }
 
