@@ -15,16 +15,19 @@ import (
 	"github.com/google/uuid"
 )
 
-// approvalWaitTimeout is the maximum time to wait for human approval.
-const approvalWaitTimeout = 30 * time.Minute
-
 // AgentExecuteStep runs the autonomous agent loop for a single task.
 type AgentExecuteStep struct {
-	name            string
-	maxIterations   int
-	providerService string
-	app             modular.Application
-	tmpl            *module.TemplateEngine
+	name                 string
+	maxIterations        int
+	providerService      string
+	app                  modular.Application
+	tmpl                 *module.TemplateEngine
+	approvalTimeout      time.Duration
+	loopDetectorCfg      LoopDetectorConfig
+	subAgentMaxPerParent int
+	subAgentMaxDepth     int
+	compactionThreshold  float64
+	browserMaxTextLen    int
 }
 
 func (s *AgentExecuteStep) Name() string { return s.name }
@@ -88,6 +91,15 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 	var toolRegistry *ToolRegistry
 	if svc, ok := s.app.SvcRegistry()["ratchet-tool-registry"]; ok {
 		toolRegistry, _ = svc.(*ToolRegistry)
+	}
+
+	// Apply browser text length override from step config if set.
+	if s.browserMaxTextLen > 0 && toolRegistry != nil {
+		if tool, ok := toolRegistry.Get("browser_navigate"); ok {
+			if bt, ok := tool.(*tools.BrowserNavigateTool); ok {
+				bt.MaxTextLength = s.browserMaxTextLen
+			}
+		}
 	}
 	var guard *SecretGuard
 	if svc, ok := s.app.SvcRegistry()["ratchet-secret-guard"]; ok {
@@ -228,8 +240,8 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 
 	var finalContent string
 	iterCount := 0
-	ld := NewLoopDetector()
-	cm := NewContextManager(aiProvider.Name())
+	ld := NewLoopDetector(s.loopDetectorCfg)
+	cm := NewContextManager(aiProvider.Name(), s.compactionThreshold)
 
 	for iterCount < s.maxIterations {
 		iterCount++
@@ -507,8 +519,12 @@ func (s *AgentExecuteStep) handleApprovalWait(ctx context.Context, toolResult, a
 		}
 	}
 
-	// Wait up to 30 minutes for resolution
-	approval, err := am.WaitForResolution(ctx, approvalID, approvalWaitTimeout)
+	// Wait for resolution up to the configured approval timeout (default 30m).
+	timeout := s.approvalTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Minute
+	}
+	approval, err := am.WaitForResolution(ctx, approvalID, timeout)
 	if err != nil {
 		return fmt.Sprintf("Approval wait error: %v", err), false
 	}
@@ -536,6 +552,24 @@ func extractString(m map[string]any, key, defaultVal string) string {
 }
 
 // newAgentExecuteStepFactory returns a plugin.StepFactory for "step.agent_execute".
+//
+// Supported config keys:
+//
+//	max_iterations        int    — max agent loop iterations (default 10)
+//	provider_service      string — service registry key for the AI provider (default "ratchet-ai")
+//	approval_timeout      string — duration string for approval wait, e.g. "60m" (default "30m")
+//	loop_detection:
+//	  max_consecutive     int    — default 3
+//	  max_errors          int    — default 2
+//	  max_alternating     int    — default 3
+//	  max_no_progress     int    — default 3
+//	sub_agent:
+//	  max_per_parent      int    — default 5
+//	  max_depth           int    — default 1
+//	context:
+//	  compaction_threshold float64 — default 0.80
+//	browser:
+//	  max_text_length     int    — default 2000
 func newAgentExecuteStepFactory() plugin.StepFactory {
 	return func(name string, cfg map[string]any, app modular.Application) (any, error) {
 		maxIterations := 10
@@ -554,12 +588,73 @@ func newAgentExecuteStepFactory() plugin.StepFactory {
 			providerService = "ratchet-ai"
 		}
 
+		// approval_timeout: duration string, e.g. "30m", "1h". Default 30m.
+		approvalTimeout := 30 * time.Minute
+		if v, ok := cfg["approval_timeout"].(string); ok && v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				approvalTimeout = d
+			}
+		}
+
+		// loop_detection sub-map
+		ldCfg := LoopDetectorConfig{}
+		if raw, ok := cfg["loop_detection"].(map[string]any); ok {
+			ldCfg.MaxConsecutive = extractInt(raw, "max_consecutive", 0)
+			ldCfg.MaxErrors = extractInt(raw, "max_errors", 0)
+			ldCfg.MaxAlternating = extractInt(raw, "max_alternating", 0)
+			ldCfg.MaxNoProgress = extractInt(raw, "max_no_progress", 0)
+		}
+
+		// sub_agent sub-map
+		subAgentMaxPerParent := 0
+		subAgentMaxDepth := 0
+		if raw, ok := cfg["sub_agent"].(map[string]any); ok {
+			subAgentMaxPerParent = extractInt(raw, "max_per_parent", 0)
+			subAgentMaxDepth = extractInt(raw, "max_depth", 0)
+		}
+
+		// context sub-map
+		compactionThreshold := 0.0
+		if raw, ok := cfg["context"].(map[string]any); ok {
+			if v, ok := raw["compaction_threshold"].(float64); ok && v > 0 {
+				compactionThreshold = v
+			}
+		}
+
+		// browser sub-map
+		browserMaxTextLen := 0
+		if raw, ok := cfg["browser"].(map[string]any); ok {
+			browserMaxTextLen = extractInt(raw, "max_text_length", 0)
+		}
+
 		return &AgentExecuteStep{
-			name:            name,
-			maxIterations:   maxIterations,
-			providerService: providerService,
-			app:             app,
-			tmpl:            module.NewTemplateEngine(),
+			name:                 name,
+			maxIterations:        maxIterations,
+			providerService:      providerService,
+			app:                  app,
+			tmpl:                 module.NewTemplateEngine(),
+			approvalTimeout:      approvalTimeout,
+			loopDetectorCfg:      ldCfg,
+			subAgentMaxPerParent: subAgentMaxPerParent,
+			subAgentMaxDepth:     subAgentMaxDepth,
+			compactionThreshold:  compactionThreshold,
+			browserMaxTextLen:    browserMaxTextLen,
 		}, nil
 	}
+}
+
+// extractInt reads an integer value from a map by key, accepting both int and float64.
+// Returns defaultVal if the key is absent or zero.
+func extractInt(m map[string]any, key string, defaultVal int) int {
+	v, ok := m[key]
+	if !ok {
+		return defaultVal
+	}
+	switch n := v.(type) {
+	case int:
+		return n
+	case float64:
+		return int(n)
+	}
+	return defaultVal
 }
