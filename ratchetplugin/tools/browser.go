@@ -18,10 +18,16 @@ type BrowserPageProvider interface {
 	GetPage(agentID string) (*rod.Page, error)
 }
 
+// defaultBrowserMaxTextLength is the default cap applied to extracted page text.
+const defaultBrowserMaxTextLength = 2000
+
 // BrowserNavigateTool navigates the agent's browser page to a URL and returns
 // the page title and a text excerpt.
 type BrowserNavigateTool struct {
 	Manager BrowserPageProvider
+	// MaxTextLength caps the number of characters returned in the page text field.
+	// A value of 0 (or negative) falls back to defaultBrowserMaxTextLength (2000).
+	MaxTextLength int
 }
 
 func (t *BrowserNavigateTool) Name() string { return "browser_navigate" }
@@ -79,8 +85,12 @@ func (t *BrowserNavigateTool) Execute(ctx context.Context, args map[string]any) 
 	if err == nil && textRes != nil {
 		text = textRes.Value.String()
 	}
-	if len(text) > 2000 {
-		text = text[:2000]
+	maxLen := t.MaxTextLength
+	if maxLen <= 0 {
+		maxLen = defaultBrowserMaxTextLength
+	}
+	if len(text) > maxLen {
+		text = text[:maxLen]
 	}
 
 	return map[string]any{

@@ -75,14 +75,14 @@ func TestEstimateTokens_GrowsWithContent(t *testing.T) {
 // --- NewContextManager ---
 
 func TestNewContextManager_DefaultLimit(t *testing.T) {
-	cm := NewContextManager("some-unknown-model")
+	cm := NewContextManager("some-unknown-model", 0)
 	if cm.ContextLimitTokens() != defaultContextLimit {
 		t.Errorf("expected default limit %d, got %d", defaultContextLimit, cm.ContextLimitTokens())
 	}
 }
 
 func TestNewContextManager_KnownProvider(t *testing.T) {
-	cm := NewContextManager("gpt-4o")
+	cm := NewContextManager("gpt-4o", 0)
 	if cm.ContextLimitTokens() < 128_000 {
 		t.Errorf("gpt-4o: expected >= 128k, got %d", cm.ContextLimitTokens())
 	}
@@ -91,7 +91,7 @@ func TestNewContextManager_KnownProvider(t *testing.T) {
 // --- NeedsCompaction ---
 
 func TestNeedsCompaction_BelowThreshold(t *testing.T) {
-	cm := NewContextManager("gpt-4o") // 128k limit
+	cm := NewContextManager("gpt-4o", 0) // 128k limit
 	// A tiny message array is far below 80%
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "You are an agent."},
@@ -121,7 +121,7 @@ func TestNeedsCompaction_AboveThreshold(t *testing.T) {
 // --- TokenUsage ---
 
 func TestTokenUsage(t *testing.T) {
-	cm := NewContextManager("gpt-4o")
+	cm := NewContextManager("gpt-4o", 0)
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
 		{Role: provider.RoleUser, Content: "hello world"},
@@ -155,7 +155,7 @@ func (m *mockSummaryProvider) Stream(_ context.Context, _ []provider.Message, _ 
 }
 
 func TestCompact_ShortConversation(t *testing.T) {
-	cm := NewContextManager("gpt-4o")
+	cm := NewContextManager("gpt-4o", 0)
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "system prompt"},
 		{Role: provider.RoleUser, Content: "user msg"},
@@ -172,7 +172,7 @@ func TestCompact_ShortConversation(t *testing.T) {
 }
 
 func TestCompact_LongConversation(t *testing.T) {
-	cm := NewContextManager("gpt-4o")
+	cm := NewContextManager("gpt-4o", 0)
 
 	// Build a long conversation: system + many middle turns + tail
 	msgs := []provider.Message{
@@ -221,7 +221,7 @@ func TestCompact_LongConversation(t *testing.T) {
 }
 
 func TestCompact_PreservesSystemAndTail(t *testing.T) {
-	cm := NewContextManager("gpt-4o")
+	cm := NewContextManager("gpt-4o", 0)
 	systemContent := "You are a very specific agent."
 	tailContent := "latest tool result"
 
@@ -262,7 +262,7 @@ func TestCompact_PreservesSystemAndTail(t *testing.T) {
 }
 
 func TestCompact_LLMFailureFallback(t *testing.T) {
-	cm := NewContextManager("gpt-4o")
+	cm := NewContextManager("gpt-4o", 0)
 
 	msgs := []provider.Message{
 		{Role: provider.RoleSystem, Content: "system"},
@@ -300,7 +300,7 @@ func (e *errorProvider) Stream(_ context.Context, _ []provider.Message, _ []prov
 }
 
 func TestCompact_MultipleCompactions(t *testing.T) {
-	cm := NewContextManager("gpt-4o")
+	cm := NewContextManager("gpt-4o", 0)
 	mock := &mockSummaryProvider{summary: "summary"}
 
 	msgs := make([]provider.Message, 0, 15)

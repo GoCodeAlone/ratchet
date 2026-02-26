@@ -16,6 +16,9 @@ import (
 	"github.com/GoCodeAlone/workflow/plugin"
 )
 
+// mcpProtocolVersion is the MCP protocol version sent during initialization.
+const mcpProtocolVersion = "2024-11-05"
+
 // jsonRPCRequest is a JSON-RPC 2.0 request.
 type jsonRPCRequest struct {
 	JSONRPC string `json:"jsonrpc"`
@@ -196,7 +199,7 @@ func (m *MCPClientModule) Start(ctx context.Context) error {
 
 		// Initialize the MCP connection
 		_, _ = client.call("initialize", map[string]any{
-			"protocolVersion": "2024-11-05",
+			"protocolVersion": mcpProtocolVersion,
 			"capabilities":    map[string]any{},
 			"clientInfo": map[string]any{
 				"name":    "ratchet",
@@ -262,7 +265,7 @@ func (m *MCPClientModule) ReloadServers(configs []mcpServerConfig) (int, []strin
 
 		// Initialize
 		_, _ = client.call("initialize", map[string]any{
-			"protocolVersion": "2024-11-05",
+			"protocolVersion": mcpProtocolVersion,
 			"capabilities":    map[string]any{},
 			"clientInfo": map[string]any{
 				"name":    "ratchet",

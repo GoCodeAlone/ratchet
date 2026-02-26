@@ -8,9 +8,10 @@ import (
 	"github.com/GoCodeAlone/ratchet/provider"
 )
 
-// modelContextLimits maps provider model name patterns to their token limits.
+// defaultModelContextLimits maps provider model name patterns to their token limits.
 // Keys are matched as case-insensitive prefix/substring checks.
-var modelContextLimits = map[string]int{
+// This map serves as the built-in defaults; overrides may be applied via SetModelLimit.
+var defaultModelContextLimits = map[string]int{
 	// Anthropic Claude
 	"claude-opus-4":   200_000,
 	"claude-sonnet-4": 200_000,
@@ -39,38 +40,67 @@ var modelContextLimits = map[string]int{
 // defaultContextLimit is used when the model name cannot be matched.
 const defaultContextLimit = 128_000
 
-// compactionThreshold is the fraction of the context limit at which compaction triggers.
-const compactionThreshold = 0.80
+// defaultCompactionThreshold is the fraction of the context limit at which compaction triggers.
+const defaultCompactionThreshold = 0.80
 
 // ContextManager tracks token usage across a message array and compacts the
 // conversation when it approaches the model's context limit.
 type ContextManager struct {
 	modelName    string
 	contextLimit int
-	threshold    float64 // fraction of contextLimit that triggers compaction
-	compactions  int     // number of times compaction has occurred
+	threshold    float64        // fraction of contextLimit that triggers compaction
+	compactions  int            // number of times compaction has occurred
+	modelLimits  map[string]int // per-instance overrides for model context limits
 }
 
 // NewContextManager creates a ContextManager for the given provider.
 // The model name is used to look up the context window size.
-func NewContextManager(providerName string) *ContextManager {
-	limit := lookupContextLimit(providerName)
+// compactionThreshold sets the fraction of the context limit that triggers compaction;
+// pass 0 to use the default (0.80).
+func NewContextManager(providerName string, compactionThreshold float64) *ContextManager {
+	if compactionThreshold <= 0 {
+		compactionThreshold = defaultCompactionThreshold
+	}
+	// Copy defaults so per-instance overrides don't pollute the global map.
+	limits := make(map[string]int, len(defaultModelContextLimits))
+	for k, v := range defaultModelContextLimits {
+		limits[k] = v
+	}
+	limit := lookupContextLimitFrom(limits, providerName)
 	return &ContextManager{
 		modelName:    providerName,
 		contextLimit: limit,
 		threshold:    compactionThreshold,
+		modelLimits:  limits,
 	}
 }
 
-// lookupContextLimit returns the token limit for a given model/provider name.
-// It matches the longest key that appears as a case-insensitive substring,
-// so more specific entries (e.g. "gpt-4-turbo") take precedence over shorter
-// ones (e.g. "gpt-4").
+// SetModelLimit overrides the context token limit for a specific model name pattern.
+// This allows module config to adjust limits without modifying the built-in defaults.
+func (cm *ContextManager) SetModelLimit(model string, limit int) {
+	if cm.modelLimits == nil {
+		cm.modelLimits = make(map[string]int)
+	}
+	cm.modelLimits[model] = limit
+	// Re-derive this manager's limit in case the override matches our model.
+	cm.contextLimit = lookupContextLimitFrom(cm.modelLimits, cm.modelName)
+}
+
+// lookupContextLimit returns the token limit for a given model/provider name
+// using the built-in default limits map.
 func lookupContextLimit(name string) int {
+	return lookupContextLimitFrom(defaultModelContextLimits, name)
+}
+
+// lookupContextLimitFrom returns the token limit for a given model/provider name
+// by searching the provided limits map. It matches the longest key that appears
+// as a case-insensitive substring, so more specific entries (e.g. "gpt-4-turbo")
+// take precedence over shorter ones (e.g. "gpt-4").
+func lookupContextLimitFrom(limits map[string]int, name string) int {
 	lower := strings.ToLower(name)
 	bestLen := 0
 	bestLimit := defaultContextLimit
-	for key, limit := range modelContextLimits {
+	for key, limit := range limits {
 		k := strings.ToLower(key)
 		if strings.Contains(lower, k) && len(k) > bestLen {
 			bestLen = len(k)

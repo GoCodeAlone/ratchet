@@ -444,7 +444,7 @@ func subAgentManagerHook() plugin.WiringHook {
 			if db == nil {
 				return nil // no DB, skip
 			}
-			mgr := NewSubAgentManager(db)
+			mgr := NewSubAgentManager(db, 0, 0)
 			_ = app.RegisterService("ratchet-sub-agent-manager", mgr)
 			return nil
 		},

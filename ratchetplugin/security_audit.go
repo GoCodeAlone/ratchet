@@ -119,6 +119,13 @@ type AuthCheck struct {
 
 func (c *AuthCheck) Name() string { return "auth" }
 
+// authMiddleware is a marker interface implemented by authentication middleware services.
+// Any service that wants to be recognised as auth middleware by the security auditor
+// should implement this interface.
+type authMiddleware interface {
+	IsAuthMiddleware() bool
+}
+
 func (c *AuthCheck) Run(_ context.Context) []AuditFinding {
 	var findings []AuditFinding
 
@@ -134,8 +141,8 @@ func (c *AuthCheck) Run(_ context.Context) []AuditFinding {
 				break
 			}
 		}
-		// Also check if it's an AuthMiddleware by checking its type string.
-		if fmt.Sprintf("%T", svc) == "*module.AuthMiddleware" {
+		// Check for the authMiddleware marker interface (preferred over type-string comparison).
+		if am, ok := svc.(authMiddleware); ok && am.IsAuthMiddleware() {
 			hasAuth = true
 			break
 		}

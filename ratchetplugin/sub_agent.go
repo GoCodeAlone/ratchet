@@ -18,12 +18,20 @@ type SubAgentManager struct {
 	maxDepth     int // default 1 (no recursive spawning)
 }
 
-// NewSubAgentManager creates a new SubAgentManager with default limits.
-func NewSubAgentManager(db *sql.DB) *SubAgentManager {
+// NewSubAgentManager creates a new SubAgentManager.
+// maxPerParent is the maximum number of concurrent sub-agents per parent (default 5 when <= 0).
+// maxDepth is the maximum spawn depth — ephemeral agents at this depth cannot spawn further (default 1 when <= 0).
+func NewSubAgentManager(db *sql.DB, maxPerParent, maxDepth int) *SubAgentManager {
+	if maxPerParent <= 0 {
+		maxPerParent = 5
+	}
+	if maxDepth <= 0 {
+		maxDepth = 1
+	}
 	return &SubAgentManager{
 		db:           db,
-		maxPerParent: 5,
-		maxDepth:     1,
+		maxPerParent: maxPerParent,
+		maxDepth:     maxDepth,
 	}
 }
 
