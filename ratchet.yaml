@@ -1911,6 +1911,116 @@ workflows:
                 body_from: "steps.resolve"
 
       # ============================================================
+      # HUMAN REQUEST ROUTES (auth required)
+      # ============================================================
+
+      # List pending human requests
+      - method: GET
+        path: "/api/requests"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-requests
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, request_type, title, description, urgency, status, response_data, response_comment, resolved_by, timeout_minutes, metadata, created_at, resolved_at FROM human_requests WHERE status = 'pending' ORDER BY CASE urgency WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 END, created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-requests.rows"
+
+      # List all human requests (any status)
+      - method: GET
+        path: "/api/requests/all"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-all
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, request_type, title, description, urgency, status, response_data, response_comment, resolved_by, timeout_minutes, metadata, created_at, resolved_at FROM human_requests ORDER BY created_at DESC LIMIT 100"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-all.rows"
+
+      # Get a single human request by ID
+      - method: GET
+        path: "/api/requests/{id}"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-request
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, request_type, title, description, urgency, status, response_data, response_comment, resolved_by, timeout_minutes, metadata, created_at, resolved_at FROM human_requests WHERE id = ?"
+                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                mode: single
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-request.row"
+
+      # Resolve a human request (provide the requested data)
+      - method: POST
+        path: "/api/requests/{id}/resolve"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: resolve
+              type: step.human_request_resolve
+              config:
+                action: resolve
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.resolve"
+
+      # Cancel a human request
+      - method: POST
+        path: "/api/requests/{id}/cancel"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: cancel
+              type: step.human_request_resolve
+              config:
+                action: cancel
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.cancel"
+
+      # ============================================================
       # SERVER INFO ROUTE (auth required — used by Settings page)
       # ============================================================
 

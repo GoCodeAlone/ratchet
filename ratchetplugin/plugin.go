@@ -39,8 +39,8 @@ func New() *RatchetPlugin {
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact"},
-				WiringHooks: []string{"ratchet.sse_route_registration", "ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact", "step.human_request_resolve"},
+				WiringHooks: []string{"ratchet.sse_route_registration", "ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.human_request_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
 			},
 		},
 	}
@@ -65,19 +65,20 @@ func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 // StepFactories returns the pipeline step factories registered by this plugin.
 func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 	return map[string]plugin.StepFactory{
-		"step.agent_execute":     newAgentExecuteStepFactory(),
-		"step.workspace_init":    newWorkspaceInitFactory(),
-		"step.container_control": newContainerControlFactory(),
-		"step.secret_manage":     newSecretManageFactory(),
-		"step.provider_test":     newProviderTestFactory(),
-		"step.vault_config":      newVaultConfigFactory(),
-		"step.provider_models":   newProviderModelsFactory(),
-		"step.mcp_reload":        newMCPReloadFactory(),
-		"step.oauth_exchange":    newOAuthExchangeFactory(),
-		"step.approval_resolve":  newApprovalResolveFactory(),
-		"step.webhook_process":   newWebhookProcessStepFactory(),
-		"step.security_audit":    newSecurityAuditFactory(),
-		"step.test_interact":     newTestInteractFactory(),
+		"step.agent_execute":         newAgentExecuteStepFactory(),
+		"step.workspace_init":        newWorkspaceInitFactory(),
+		"step.container_control":     newContainerControlFactory(),
+		"step.secret_manage":         newSecretManageFactory(),
+		"step.provider_test":         newProviderTestFactory(),
+		"step.vault_config":          newVaultConfigFactory(),
+		"step.provider_models":       newProviderModelsFactory(),
+		"step.mcp_reload":            newMCPReloadFactory(),
+		"step.oauth_exchange":        newOAuthExchangeFactory(),
+		"step.approval_resolve":      newApprovalResolveFactory(),
+		"step.webhook_process":       newWebhookProcessStepFactory(),
+		"step.security_audit":        newSecurityAuditFactory(),
+		"step.test_interact":         newTestInteractFactory(),
+		"step.human_request_resolve": newHumanRequestResolveFactory(),
 	}
 }
 
@@ -96,6 +97,7 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 		transcriptRecorderHook(),
 		skillManagerHook(),
 		approvalManagerHook(),
+		humanRequestManagerHook(),
 		webhookManagerHook(),
 		securityAuditorHook(),
 		browserManagerHook(),
@@ -285,6 +287,14 @@ func toolRegistryHook() plugin.WiringHook {
 				}
 			}
 
+			// Register human request tools if manager is available
+			if svc, ok := app.SvcRegistry()["ratchet-human-request-manager"]; ok {
+				if hrm, ok := svc.(*HumanRequestManager); ok {
+					registry.Register(&tools.RequestHumanTool{Manager: hrm})
+					registry.Register(&tools.CheckHumanRequestTool{Manager: hrm})
+				}
+			}
+
 			// Register sub-agent tools if sub-agent manager is available
 			if svc, ok := app.SvcRegistry()["ratchet-sub-agent-manager"]; ok {
 				if mgr, ok := svc.(tools.SubAgentSpawner); ok {
@@ -373,7 +383,7 @@ func transcriptRecorderHook() plugin.WiringHook {
 func approvalManagerHook() plugin.WiringHook {
 	return plugin.WiringHook{
 		Name:     "ratchet.approval_manager",
-		Priority: 74,
+		Priority: 81,
 		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
 			var db *sql.DB
 			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
@@ -396,6 +406,34 @@ func approvalManagerHook() plugin.WiringHook {
 			}
 
 			_ = app.RegisterService("ratchet-approval-manager", am)
+			return nil
+		},
+	}
+}
+
+// humanRequestManagerHook creates a HumanRequestManager and registers it in the service registry.
+func humanRequestManagerHook() plugin.WiringHook {
+	return plugin.WiringHook{
+		Name:     "ratchet.human_request_manager",
+		Priority: 81,
+		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+			var db *sql.DB
+			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
+				if dbp, ok := svc.(module.DBProvider); ok {
+					db = dbp.DB()
+				}
+			}
+			if db == nil {
+				return nil
+			}
+			hrm := NewHumanRequestManager(db)
+			for _, svc := range app.SvcRegistry() {
+				if hub, ok := svc.(*SSEHub); ok {
+					hrm.SetSSEHub(hub)
+					break
+				}
+			}
+			_ = app.RegisterService("ratchet-human-request-manager", hrm)
 			return nil
 		},
 	}

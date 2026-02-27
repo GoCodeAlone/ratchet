@@ -1011,7 +1011,7 @@ func TestPlugin_StepFactories(t *testing.T) {
 		"step.secret_manage", "step.provider_test", "step.vault_config",
 		"step.provider_models", "step.mcp_reload", "step.oauth_exchange",
 		"step.approval_resolve", "step.webhook_process", "step.security_audit",
-		"step.test_interact",
+		"step.test_interact", "step.human_request_resolve",
 	}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {
@@ -1027,8 +1027,8 @@ func TestPlugin_WiringHooks(t *testing.T) {
 	p := New()
 	hooks := p.WiringHooks()
 
-	if len(hooks) != 16 {
-		t.Fatalf("expected 16 wiring hooks, got %d", len(hooks))
+	if len(hooks) != 17 {
+		t.Fatalf("expected 17 wiring hooks, got %d", len(hooks))
 	}
 
 	expectedNames := map[string]bool{
@@ -1044,6 +1044,7 @@ func TestPlugin_WiringHooks(t *testing.T) {
 		"ratchet.sub_agent_manager":      false,
 		"ratchet.skill_manager":          false,
 		"ratchet.approval_manager":       false,
+		"ratchet.human_request_manager":  false,
 		"ratchet.webhook_manager":        false,
 		"ratchet.security_auditor":       false,
 		"ratchet.browser_manager":        false,
