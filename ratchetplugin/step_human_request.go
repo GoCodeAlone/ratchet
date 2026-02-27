@@ -143,7 +143,10 @@ func (s *HumanRequestResolveStep) autoStoreSecret(ctx context.Context, hrm *Huma
 	if svc, ok := s.app.SvcRegistry()["ratchet-secret-guard"]; ok {
 		if guard, ok := svc.(*SecretGuard); ok {
 			if sp := guard.Provider(); sp != nil {
-				_ = sp.Set(ctx, secretName, value)
+				if err := sp.Set(ctx, secretName, value); err != nil {
+					fmt.Printf("ratchetplugin: failed to store secret %q: %v\n", secretName, err)
+					return
+				}
 				guard.AddKnownSecret(secretName, value)
 			}
 		}

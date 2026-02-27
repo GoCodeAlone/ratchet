@@ -67,19 +67,45 @@ func (t *RequestHumanTool) Definition() provider.ToolDef {
 	}
 }
 
+func isValidRequestType(reqType string) bool {
+	switch reqType {
+	case "token", "binary", "access", "info", "custom":
+		return true
+	default:
+		return false
+	}
+}
+
+func isValidUrgency(urgency string) bool {
+	switch urgency {
+	case "low", "normal", "high", "critical":
+		return true
+	default:
+		return false
+	}
+}
+
 func (t *RequestHumanTool) Execute(ctx context.Context, args map[string]any) (any, error) {
 	reqType, _ := args["request_type"].(string)
 	if reqType == "" {
 		return nil, fmt.Errorf("request_type is required")
 	}
+	if !isValidRequestType(reqType) {
+		return nil, fmt.Errorf("invalid request_type: %s", reqType)
+	}
+
 	title, _ := args["title"].(string)
 	if title == "" {
 		return nil, fmt.Errorf("title is required")
 	}
+
 	description, _ := args["description"].(string)
 	urgency, _ := args["urgency"].(string)
 	if urgency == "" {
 		urgency = "normal"
+	}
+	if !isValidUrgency(urgency) {
+		return nil, fmt.Errorf("invalid urgency: %s", urgency)
 	}
 
 	// Serialize metadata to JSON string
@@ -152,5 +178,15 @@ func (t *CheckHumanRequestTool) Execute(ctx context.Context, args map[string]any
 		return nil, fmt.Errorf("human request manager not available")
 	}
 
-	return t.Manager.GetRequest(ctx, requestID)
+	req, err := t.Manager.GetRequest(ctx, requestID)
+	if err != nil {
+		return nil, fmt.Errorf("get human request: %w", err)
+	}
+
+	// Redact sensitive data for token-type requests so secrets are not exposed to the agent/LLM.
+	if reqType, ok := req["request_type"].(string); ok && reqType == "token" {
+		delete(req, "response_data")
+	}
+
+	return req, nil
 }

@@ -361,8 +361,12 @@ function ResolutionForm({
 function ResolutionInfo({ request }: { request: HumanRequest }) {
   const statusColor = requestStatusColors[request.status] ?? colors.overlay0;
 
+  // For token requests, never display response_data (it may contain secrets).
+  // Instead show a confirmation that the value was stored.
+  const isToken = request.request_type === 'token';
+
   let parsedResponse: unknown = null;
-  if (request.response_data) {
+  if (!isToken && request.response_data) {
     try {
       parsedResponse = JSON.parse(request.response_data);
     } catch {
@@ -370,12 +374,20 @@ function ResolutionInfo({ request }: { request: HumanRequest }) {
     }
   }
 
-  const responseDisplay =
-    parsedResponse !== null
+  const responseDisplay = isToken
+    ? null
+    : parsedResponse !== null
       ? typeof parsedResponse === 'string'
         ? parsedResponse
         : JSON.stringify(parsedResponse, null, 2)
       : null;
+
+  // Extract secret_name from metadata for token requests
+  const metadata = parseMetadata(request.metadata);
+  const secretName = isToken
+    ? (typeof metadata?.secret_name === 'string' ? metadata.secret_name : null)
+      ?? (typeof metadata?.secret === 'string' ? metadata.secret : null)
+    : null;
 
   return (
     <div
@@ -396,6 +408,21 @@ function ResolutionInfo({ request }: { request: HumanRequest }) {
           </span>
         )}
       </div>
+
+      {isToken && request.status === 'resolved' && (
+        <div
+          style={{
+            fontSize: '12px',
+            color: colors.green,
+            backgroundColor: `${colors.green}15`,
+            padding: '6px 10px',
+            borderRadius: '6px',
+            fontFamily: 'monospace',
+          }}
+        >
+          Secret stored{secretName ? ` as ${secretName}` : ''}
+        </div>
+      )}
 
       {responseDisplay && (
         <div>
