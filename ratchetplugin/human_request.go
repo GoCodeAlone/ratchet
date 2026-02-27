@@ -128,12 +128,17 @@ func (m *HumanRequestManager) CreateRequest(ctx context.Context, agentID, taskID
 
 // Resolve marks a human request as resolved with the provided response data.
 func (m *HumanRequestManager) Resolve(ctx context.Context, id, responseData, comment, resolvedBy string) error {
-	_, err := m.db.ExecContext(ctx,
+	result, err := m.db.ExecContext(ctx,
 		`UPDATE human_requests SET status = 'resolved', response_data = ?, response_comment = ?, resolved_by = ?, resolved_at = datetime('now') WHERE id = ? AND status = 'pending'`,
 		responseData, comment, resolvedBy, id,
 	)
 	if err != nil {
 		return fmt.Errorf("resolve human request: %w", err)
+	}
+
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("resolve human request: request %q not found or not pending", id)
 	}
 
 	m.pushSSEEvent("human_request_resolved", map[string]any{
@@ -147,12 +152,17 @@ func (m *HumanRequestManager) Resolve(ctx context.Context, id, responseData, com
 
 // Cancel marks a human request as cancelled.
 func (m *HumanRequestManager) Cancel(ctx context.Context, id, comment string) error {
-	_, err := m.db.ExecContext(ctx,
+	result, err := m.db.ExecContext(ctx,
 		`UPDATE human_requests SET status = 'cancelled', response_comment = ?, resolved_at = datetime('now') WHERE id = ? AND status = 'pending'`,
 		comment, id,
 	)
 	if err != nil {
 		return fmt.Errorf("cancel human request: %w", err)
+	}
+
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return fmt.Errorf("cancel human request: request %q not found or not pending", id)
 	}
 
 	m.pushSSEEvent("human_request_cancelled", map[string]any{

@@ -242,7 +242,7 @@ var migrations = []struct {
 	// v5: migrate seeded agents from hardcoded 'mock' provider to '' (use default)
 	{5, "UPDATE agents SET provider = '' WHERE provider = 'mock'"},
 	// v6: add human_requests table
-	{6, "CREATE TABLE IF NOT EXISTS human_requests (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL DEFAULT '', task_id TEXT NOT NULL DEFAULT '', project_id TEXT NOT NULL DEFAULT '', request_type TEXT NOT NULL DEFAULT 'info', title TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', urgency TEXT NOT NULL DEFAULT 'normal', status TEXT NOT NULL DEFAULT 'pending', response_data TEXT NOT NULL DEFAULT '', response_comment TEXT NOT NULL DEFAULT '', resolved_by TEXT NOT NULL DEFAULT '', timeout_minutes INTEGER NOT NULL DEFAULT 0, metadata TEXT NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL DEFAULT (datetime('now')), resolved_at DATETIME)"},
+	{6, "CREATE TABLE IF NOT EXISTS human_requests (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL DEFAULT '', task_id TEXT NOT NULL DEFAULT '', project_id TEXT NOT NULL DEFAULT '', request_type TEXT NOT NULL DEFAULT 'info', title TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', urgency TEXT NOT NULL DEFAULT 'normal', status TEXT NOT NULL DEFAULT 'pending', response_data TEXT NOT NULL DEFAULT '', response_comment TEXT NOT NULL DEFAULT '', resolved_by TEXT NOT NULL DEFAULT '', timeout_minutes INTEGER NOT NULL DEFAULT 0, metadata TEXT NOT NULL DEFAULT '{}', created_at DATETIME NOT NULL DEFAULT (datetime('now')), resolved_at DATETIME)"},
 }
 
 // dbInitHook creates a WiringHook that initialises the ratchet database tables

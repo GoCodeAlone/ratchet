@@ -148,3 +148,26 @@ export interface Skill {
   required_tools: string; // JSON array string from DB
   created_at: string;
 }
+
+export type RequestType = 'token' | 'binary' | 'access' | 'info' | 'custom';
+export type RequestStatus = 'pending' | 'resolved' | 'cancelled' | 'expired';
+export type RequestUrgency = 'low' | 'normal' | 'high' | 'critical';
+
+export interface HumanRequest {
+  id: string;
+  agent_id: string;
+  task_id: string;
+  project_id: string;
+  request_type: RequestType;
+  title: string;
+  description: string;
+  urgency: RequestUrgency;
+  status: RequestStatus;
+  response_data: string;
+  response_comment: string;
+  resolved_by: string;
+  timeout_minutes: number;
+  metadata: string;
+  created_at: string;
+  resolved_at: string | null;
+}

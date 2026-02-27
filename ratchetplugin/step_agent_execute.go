@@ -602,7 +602,21 @@ func (s *AgentExecuteStep) handleHumanRequestWait(ctx context.Context, toolResul
 
 	switch req.Status {
 	case RequestResolved:
-		msg := fmt.Sprintf("Human responded to your request. Response: %s", req.ResponseData)
+		var msg string
+		if req.RequestType == RequestTypeToken {
+			// Do not leak secret values into the agent transcript/LLM context.
+			// Reference the secret_name from metadata so the agent can read via SecretGuard.
+			secretRef := "the configured secret store"
+			var meta map[string]any
+			if jsonErr := json.Unmarshal([]byte(req.Metadata), &meta); jsonErr == nil {
+				if sn, ok := meta["secret_name"].(string); ok && sn != "" {
+					secretRef = fmt.Sprintf("secret %q", sn)
+				}
+			}
+			msg = fmt.Sprintf("Human provided the requested token. It has been stored in %s. Do not request the raw value — read it via the secrets provider.", secretRef)
+		} else {
+			msg = fmt.Sprintf("Human responded to your request. Response: %s", req.ResponseData)
+		}
 		if req.ResponseComment != "" {
 			msg += fmt.Sprintf(" Comment: %s", req.ResponseComment)
 		}

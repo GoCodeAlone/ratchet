@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from '@gocodealone/workflow-ui/api';
-import type { Project, TranscriptEntry, AgentInfo, Task, ProjectRepo, ContainerStatus, WorkspaceSpec, LLMProvider, ProviderTestResult, Skill } from '../types';
+import type { Project, TranscriptEntry, AgentInfo, Task, ProjectRepo, ContainerStatus, WorkspaceSpec, LLMProvider, ProviderTestResult, Skill, HumanRequest } from '../types';
 
 // Re-export base HTTP verbs for consumers
 export { apiGet, apiPost, apiPatch, apiDelete, apiPut };
@@ -106,3 +106,12 @@ export const assignSkillToAgent = (agentId: string, skillId: string) =>
   apiPost<{ assigned: boolean }>(`/agents/${agentId}/skills`, { skill_id: skillId });
 export const removeSkillFromAgent = (agentId: string, skillId: string) =>
   apiDelete<{ removed: boolean }>(`/agents/${agentId}/skills/${skillId}`);
+
+// Human Requests
+export const fetchPendingRequests = () => apiGet<HumanRequest[]>('/requests');
+export const fetchAllRequests = () => apiGet<HumanRequest[]>('/requests/all');
+export const fetchRequest = (id: string) => apiGet<HumanRequest>(`/requests/${id}`);
+export const resolveRequest = (id: string, data: { response_data?: unknown; comment?: string }) =>
+  apiPost<{ id: string; action: string; success: boolean }>(`/requests/${id}/resolve`, data);
+export const cancelRequest = (id: string, data?: { comment?: string }) =>
+  apiPost<{ id: string; action: string; success: boolean }>(`/requests/${id}/cancel`, data ?? {});

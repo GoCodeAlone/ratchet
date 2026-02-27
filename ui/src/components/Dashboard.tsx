@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { useTaskStore } from '../store/taskStore';
+import { useRequestStore } from '../store/requestStore';
 import { colors, statusColors, baseStyles } from '../theme';
 import { AgentStatus } from '../types';
 
-type NavItem = 'dashboard' | 'agents' | 'tasks' | 'messages' | 'settings';
+type NavItem = 'dashboard' | 'agents' | 'tasks' | 'messages' | 'projects' | 'requests' | 'skills' | 'settings';
 
 interface DashboardProps {
   onNavigate: (page: NavItem) => void;
@@ -60,16 +61,23 @@ function StatusDot({ status }: { status: AgentStatus }) {
 export default function Dashboard({ onNavigate }: DashboardProps) {
   const { agents, fetchAgents } = useAgentStore();
   const { tasks, fetchTasks } = useTaskStore();
+  const { requests, fetchRequests, subscribeSSE, unsubscribeSSE } = useRequestStore();
 
   useEffect(() => {
     fetchAgents();
     fetchTasks();
-  }, [fetchAgents, fetchTasks]);
+    fetchRequests();
+    subscribeSSE();
+    return () => {
+      unsubscribeSSE();
+    };
+  }, [fetchAgents, fetchTasks, fetchRequests, subscribeSSE, unsubscribeSSE]);
 
   const activeAgents = agents.filter((a) => a.status === 'working' || a.status === 'active').length;
   const pendingTasks = tasks.filter((t) => t.status === 'pending').length;
   const completedTasks = tasks.filter((t) => t.status === 'completed').length;
   const failedTasks = tasks.filter((t) => t.status === 'failed').length;
+  const pendingRequests = requests.filter((r) => r.status === 'pending').length;
 
   const recentTasks = [...tasks]
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
@@ -83,6 +91,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         <StatCard label="Active Agents" value={activeAgents} color={colors.green} />
         <StatCard label="Pending Tasks" value={pendingTasks} color={colors.yellow} />
         <StatCard label="Completed Tasks" value={completedTasks} color={colors.teal} />
+        {pendingRequests > 0 && (
+          <StatCard label="Pending Requests" value={pendingRequests} color={colors.peach} />
+        )}
         {failedTasks > 0 && (
           <StatCard label="Failed Tasks" value={failedTasks} color={colors.red} />
         )}
