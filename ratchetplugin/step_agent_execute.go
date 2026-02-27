@@ -23,6 +23,7 @@ type AgentExecuteStep struct {
 	app                  modular.Application
 	tmpl                 *module.TemplateEngine
 	approvalTimeout      time.Duration
+	requestTimeout       time.Duration
 	loopDetectorCfg      LoopDetectorConfig
 	subAgentMaxPerParent int
 	subAgentMaxDepth     int
@@ -363,6 +364,21 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 				}
 			}
 
+			// Handle human request blocking: if the tool was request_human with blocking=true, pause and wait.
+			if tc.Name == "request_human" && !isError {
+				if blockingOutput, breakLoop := s.handleHumanRequestWait(ctx, resultStr, agentName, iterCount); breakLoop {
+					output := map[string]any{
+						"result":     blockingOutput,
+						"status":     "request_expired",
+						"iterations": iterCount,
+						"error":      blockingOutput,
+					}
+					return &module.StepResult{Output: output}, nil
+				} else if blockingOutput != "" {
+					resultStr = blockingOutput
+				}
+			}
+
 			// Redact tool results
 			if guard != nil {
 				resultStr = guard.Redact(resultStr)
@@ -541,6 +557,65 @@ func (s *AgentExecuteStep) handleApprovalWait(ctx context.Context, toolResult, a
 	}
 }
 
+// handleHumanRequestWait parses the request_human tool result, checks if blocking=true,
+// finds the HumanRequestManager, and waits for resolution. Returns (message, breakLoop):
+//   - breakLoop=true means the request expired and the loop should stop.
+//   - breakLoop=false and non-empty message means continue with that message.
+//   - breakLoop=false and empty message means non-blocking, just continue.
+func (s *AgentExecuteStep) handleHumanRequestWait(ctx context.Context, toolResult, agentName string, iterCount int) (string, bool) {
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(toolResult), &parsed); err != nil {
+		return "", false
+	}
+	blocking, _ := parsed["blocking"].(bool)
+	if !blocking {
+		return "", false // non-blocking, just continue
+	}
+	requestID, _ := parsed["request_id"].(string)
+	if requestID == "" {
+		return "", false
+	}
+
+	var hrm *HumanRequestManager
+	if svc, ok := s.app.SvcRegistry()["ratchet-human-request-manager"]; ok {
+		hrm, _ = svc.(*HumanRequestManager)
+	}
+	if hrm == nil {
+		return "", false
+	}
+
+	if s.app != nil {
+		if logger := s.app.Logger(); logger != nil {
+			logger.Info("agent_execute: waiting for human request resolution",
+				"agent", agentName, "iteration", iterCount, "request_id", requestID)
+		}
+	}
+
+	timeout := s.requestTimeout
+	if timeout <= 0 {
+		timeout = 60 * time.Minute
+	}
+	req, err := hrm.WaitForResolution(ctx, requestID, timeout)
+	if err != nil {
+		return fmt.Sprintf("Human request wait error: %v", err), false
+	}
+
+	switch req.Status {
+	case RequestResolved:
+		msg := fmt.Sprintf("Human responded to your request. Response: %s", req.ResponseData)
+		if req.ResponseComment != "" {
+			msg += fmt.Sprintf(" Comment: %s", req.ResponseComment)
+		}
+		return msg, false
+	case RequestCancelled:
+		return fmt.Sprintf("Human cancelled your request. Comment: %s", req.ResponseComment), false
+	case RequestExpired:
+		return "Human request timed out. No response was received within the timeout period.", true
+	default:
+		return "", false
+	}
+}
+
 // extractString safely pulls a string value from a map.
 func extractString(m map[string]any, key, defaultVal string) string {
 	if v, ok := m[key]; ok {
@@ -596,6 +671,14 @@ func newAgentExecuteStepFactory() plugin.StepFactory {
 			}
 		}
 
+		// request_timeout: duration string, e.g. "60m", "2h". Default 60m.
+		requestTimeout := 60 * time.Minute
+		if v, ok := cfg["request_timeout"].(string); ok && v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				requestTimeout = d
+			}
+		}
+
 		// loop_detection sub-map
 		ldCfg := LoopDetectorConfig{}
 		if raw, ok := cfg["loop_detection"].(map[string]any); ok {
@@ -634,6 +717,7 @@ func newAgentExecuteStepFactory() plugin.StepFactory {
 			app:                  app,
 			tmpl:                 module.NewTemplateEngine(),
 			approvalTimeout:      approvalTimeout,
+			requestTimeout:       requestTimeout,
 			loopDetectorCfg:      ldCfg,
 			subAgentMaxPerParent: subAgentMaxPerParent,
 			subAgentMaxDepth:     subAgentMaxDepth,
