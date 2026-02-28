@@ -1,0 +1,9 @@
+# Triggers
+# Schedule-based triggers for background processing
+
+triggers:
+  schedule:
+    jobs:
+      - cron: "* * * * *"
+        workflow: "pipeline:agent-tick"
+        action: "tick"

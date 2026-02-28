@@ -83,13 +83,22 @@ Ratchet runs entirely on the **GoCodeAlone/workflow engine**. The server is conf
 
 | File | Purpose |
 |------|---------|
-| `ratchet.yaml` | Complete server config (modules, routes, pipelines, triggers) |
+| `ratchet.yaml` | Main config orchestrator (imports domain config files) |
+| `config/modules.yaml` | Infrastructure modules (15 modules) + requires section |
+| `config/routes-core.yaml` | Public routes (status, auth, version, info) |
+| `config/routes-agents.yaml` | Agent management routes (12 routes) |
+| `config/routes-tasks.yaml` | Task management routes (5 routes) |
+| `config/routes-providers.yaml` | AI provider management routes (8 routes) |
+| `config/routes-projects.yaml` | Project, repo, container routes (12 routes) |
+| `config/routes-system.yaml` | System routes (secrets, vault, MCP, webhooks, etc.) |
+| `config/pipelines.yaml` | Background processing pipelines (agent-tick) |
+| `config/triggers.yaml` | Scheduled triggers |
 | `ratchetplugin/plugin.go` | EnginePlugin registration (module/step/hook factories) |
 | `ratchetplugin/db.go` | DB schema init + agent seeding wiring hook |
 | `ratchetplugin/module_ai_provider.go` | AI provider module with mock implementation |
 | `ratchetplugin/step_agent_execute.go` | Autonomous agent loop pipeline step |
 | `ratchetplugin/module_sse_hub.go` | SSE real-time events module |
-| `cmd/ratchetd/main.go` | ~100 line engine bootstrap |
+| `cmd/ratchetd/main.go` | ~70 line engine bootstrap (EngineBuilder) |
 | `cmd/ratchet/main.go` | CLI client (unchanged) |
 
 ## Key Conventions
@@ -99,7 +108,7 @@ Ratchet runs entirely on the **GoCodeAlone/workflow engine**. The server is conf
 - Always run `go fmt` and `golangci-lint` before committing
 - Use `-race` flag for tests involving concurrency
 - SQLite via `storage.sqlite` module, tables created by `ratchet.db_init` hook
-- YAML config drives everything — modify `ratchet.yaml` to add routes/pipelines
+- YAML config drives everything — add routes to domain-specific files in `config/`
 - Mock provider for all testing — never require real AI API keys in tests
 - API endpoints: `POST /api/auth/login`, `GET/POST /api/agents`, `GET/POST /api/tasks`, etc.
 - Server port: `:9090` (configured in ratchet.yaml)

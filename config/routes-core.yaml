@@ -1,0 +1,127 @@
+# Core Routes
+# Auto-split from ratchet.yaml for maintainability
+
+workflows:
+  http-ratchet-core:
+    router: ratchet-router
+    server: ratchet-server
+    routes:
+      - method: GET
+        path: "/api/status"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  status: "ok"
+                  version: "1.0.0"
+                  service: "ratchet"
+
+      # Login (MVP: hardcoded admin/admin, returns static dev token)
+      - method: POST
+        path: "/api/auth/login"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: check-credentials
+              type: step.conditional
+              config:
+                # Check that username == "admin" — password check is simplified for MVP
+                field: "steps.parse-request.body.username"
+                routes:
+                  "admin": respond-ok
+                default: unauthorized
+            - name: respond-ok
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  # Must match RATCHET_AUTH_TOKEN env var (or this default when unset)
+                  token: "ratchet-dev-token-change-me-in-production"
+                  user:
+                    id: "admin"
+                    username: "admin"
+                    email: "admin@ratchet.dev"
+            - name: unauthorized
+              type: step.json_response
+              config:
+                status: 401
+                body:
+                  error: "invalid credentials"
+
+      # List all agents
+      - method: GET
+        path: "/api/info"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: count-agents
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT COUNT(*) as count FROM agents"
+                mode: single
+            - name: count-teams
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT COUNT(DISTINCT team_id) as count FROM agents WHERE team_id != ''"
+                mode: single
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  version: "1.0.0"
+                  uptime: "running"
+                  agent_count: "{{ step \"count-agents\" \"row\" \"count\" }}"
+                  team_count: "{{ step \"count-teams\" \"row\" \"count\" }}"
+                  plugins:
+                    - "ratchet.ai_provider"
+                    - "ratchet.sse_hub"
+                    - "ratchet.scheduler"
+                    - "ratchet.mcp_client"
+                    - "ratchet.mcp_server"
+                    - "ratchet.db_init"
+                    - "step.agent_execute"
+                    - "step.workspace_init"
+
+      - method: GET
+        path: "/api/version"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  version: "1.0.0"
+
+      - method: GET
+        path: "/api/auth/me"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  id: "admin"
+                  username: "admin"
+                  role: "admin"
+
+      # List all skills

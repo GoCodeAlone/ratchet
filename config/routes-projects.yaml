@@ -1,0 +1,373 @@
+# Project Routes
+# Auto-split from ratchet.yaml for maintainability
+
+workflows:
+  http-ratchet-projects:
+    router: ratchet-router
+    server: ratchet-server
+    routes:
+      - method: GET
+        path: "/api/projects"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-projects
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, description, workspace_path, workspace_spec, status, created_at, updated_at FROM projects ORDER BY created_at DESC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-projects.rows"
+
+      # Create a new project
+      - method: POST
+        path: "/api/projects"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [name]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+                  now: "{{ now }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO projects (id, name, description, workspace_spec, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ default \"{}\" (step \"parse-request\" \"body\" \"workspace_spec\") }}"
+                  - "{{ .steps.prepare.now }}"
+                  - "{{ .steps.prepare.now }}"
+            - name: init-workspace
+              type: step.workspace_init
+              config:
+                data_dir: "./data"
+                project_id: "{{ .steps.prepare.id }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  name: "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  status: "active"
+
+      # Get single project
+      - method: GET
+        path: "/api/projects/{id}"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-project
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, description, workspace_path, workspace_spec, status, created_at, updated_at FROM projects WHERE id = ?"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+                mode: single
+            - name: check-found
+              type: step.conditional
+              config:
+                field: "steps.get-project.found"
+                routes:
+                  "false": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-project.row"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "project not found"
+
+      # Update project
+      - method: PATCH
+        path: "/api/projects/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: update-project
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE projects SET name = COALESCE(NULLIF(?, ''), name), description = COALESCE(NULLIF(?, ''), description), workspace_spec = COALESCE(NULLIF(?, ''), workspace_spec), status = COALESCE(NULLIF(?, ''), status), updated_at = datetime('now') WHERE id = ?"
+                params:
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"name\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"workspace_spec\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"status\") }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  updated: true
+
+      # Get tasks for project
+      - method: GET
+        path: "/api/projects/{id}/tasks"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-tasks
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, title, description, status, priority, assigned_to, project_id, created_at, updated_at FROM tasks WHERE project_id = ? ORDER BY priority DESC, created_at ASC"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-tasks.rows"
+
+      # Get transcripts for project
+      - method: GET
+        path: "/api/projects/{id}/transcripts"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-transcripts
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE project_id = ? ORDER BY created_at ASC"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-transcripts.rows"
+
+      # Add repo to project
+      - method: POST
+        path: "/api/projects/{id}/repos"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [repo_url]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO project_repos (id, project_id, repo_url, branch, auth_token_secret) VALUES (?, ?, ?, ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"repo_url\" }}"
+                  - "{{ default \"main\" (step \"parse-request\" \"body\" \"branch\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"auth_token_secret\") }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  repo_url: "{{ step \"parse-request\" \"body\" \"repo_url\" }}"
+                  status: "pending"
+
+      # List repos for project
+      - method: GET
+        path: "/api/projects/{id}/repos"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-repos
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, project_id, repo_url, clone_path, branch, status, last_synced_at, created_at FROM project_repos WHERE project_id = ? ORDER BY created_at ASC"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-repos.rows"
+
+      # Delete repo from project
+      - method: DELETE
+        path: "/api/projects/{id}/repos/{repoId}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id, repoId]
+            - name: delete-repo
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM project_repos WHERE id = ? AND project_id = ?"
+                params:
+                  - "{{ step \"parse-request\" \"path_params\" \"repoId\" }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  deleted: true
+
+      # Start workspace container
+      - method: POST
+        path: "/api/projects/{id}/container/start"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: start-container
+              type: step.container_control
+              config:
+                action: start
+                project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                image: "{{ default \"ubuntu:22.04\" (step \"parse-request\" \"body\" \"image\") }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  status: "starting"
+
+      # Stop workspace container
+      - method: POST
+        path: "/api/projects/{id}/container/stop"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: stop-container
+              type: step.container_control
+              config:
+                action: stop
+                project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  status: "stopping"
+
+      # Get container status
+      - method: GET
+        path: "/api/projects/{id}/container/status"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-container
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, project_id, container_id, image, status, compose_file, error_message, created_at, updated_at FROM workspace_containers WHERE project_id = ?"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+                mode: single
+            - name: check-found
+              type: step.conditional
+              config:
+                field: "steps.get-container.found"
+                routes:
+                  "false": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-container.row"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  status: "none"
+
+      # List teams (derived from agents with a team_id)

@@ -1,0 +1,180 @@
+# Task Routes
+# Auto-split from ratchet.yaml for maintainability
+
+workflows:
+  http-ratchet-tasks:
+    router: ratchet-router
+    server: ratchet-server
+    routes:
+      - method: GET
+        path: "/api/tasks"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-tasks
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, title, description, status, priority, assigned_to, team_id, project_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks ORDER BY priority DESC, created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-tasks.rows"
+
+      # Create a new task
+      - method: POST
+        path: "/api/tasks"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [title]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+                  now: "{{ now }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO tasks (id, title, description, status, priority, assigned_to, team_id, project_id, parent_id, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, '', ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ step \"parse-request\" \"body\" \"title\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ default 1 (step \"parse-request\" \"body\" \"priority\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"assigned_to\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"team_id\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"project_id\") }}"
+                  - "{{ .steps.prepare.now }}"
+                  - "{{ .steps.prepare.now }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  title: "{{ step \"parse-request\" \"body\" \"title\" }}"
+                  status: "pending"
+                  created_at: "{{ .steps.prepare.now }}"
+
+      # Get single task by ID
+      - method: GET
+        path: "/api/tasks/{id}"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-task
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, title, description, status, priority, assigned_to, team_id, project_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks WHERE id = ?"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+                mode: single
+            - name: check-found
+              type: step.conditional
+              config:
+                field: "steps.get-task.found"
+                routes:
+                  "false": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-task.row"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "task not found"
+
+      # Update task (PATCH — typically used to update status, assigned_to, result)
+      - method: PATCH
+        path: "/api/tasks/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: update-task
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE tasks SET status = ?, assigned_to = ?, result = ?, updated_at = datetime('now') WHERE id = ?"
+                params:
+                  - "{{ step \"parse-request\" \"body\" \"status\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"assigned_to\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"result\" }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+            - name: check-affected
+              type: step.conditional
+              config:
+                field: "steps.update-task.affected_rows"
+                routes:
+                  "0": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  status: "{{ step \"parse-request\" \"body\" \"status\" }}"
+                  updated: true
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "task not found"
+
+      # Create a new agent
+      - method: GET
+        path: "/api/tasks/{id}/transcripts"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: list-transcripts
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE task_id = ? ORDER BY created_at ASC"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-transcripts.rows"
+
+      # List all projects

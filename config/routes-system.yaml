@@ -1,0 +1,849 @@
+# System Routes
+# Auto-split from ratchet.yaml for maintainability
+
+workflows:
+  http-ratchet-system:
+    router: ratchet-router
+    server: ratchet-server
+    routes:
+      - method: GET
+        path: "/api/secrets"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-secrets
+              type: step.secret_manage
+              config:
+                action: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-secrets"
+
+      # Set a secret
+      - method: PUT
+        path: "/api/secrets/{key}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [key]
+                parse_body: true
+            - name: set-secret
+              type: step.secret_manage
+              config:
+                action: set
+                key: "{{ step \"parse-request\" \"path_params\" \"key\" }}"
+                value: "{{ step \"parse-request\" \"body\" \"value\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.set-secret"
+
+      # Delete a secret
+      - method: DELETE
+        path: "/api/secrets/{key}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [key]
+            - name: delete-secret
+              type: step.secret_manage
+              config:
+                action: delete
+                key: "{{ step \"parse-request\" \"path_params\" \"key\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.delete-secret"
+
+      # Get vault backend status
+      - method: GET
+        path: "/api/vault/status"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: get-status
+              type: step.vault_config
+              config:
+                action: get_status
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-status"
+
+      # Test connection to a remote vault
+      - method: POST
+        path: "/api/vault/test"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: test-vault
+              type: step.vault_config
+              config:
+                action: test
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.test-vault"
+
+      # Configure remote vault backend
+      - method: POST
+        path: "/api/vault/configure"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: configure-vault
+              type: step.vault_config
+              config:
+                action: configure
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.configure-vault"
+
+      # Migrate secrets between backends
+      - method: POST
+        path: "/api/vault/migrate"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: migrate-vault
+              type: step.vault_config
+              config:
+                action: migrate
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.migrate-vault"
+
+      # Reset vault to default (vault-dev)
+      - method: POST
+        path: "/api/vault/reset"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: reset-vault
+              type: step.vault_config
+              config:
+                action: reset
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.reset-vault"
+
+      # OAuth code exchange (Anthropic backend proxy for CORS)
+      - method: POST
+        path: "/api/oauth/exchange"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: exchange
+              type: step.oauth_exchange
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.exchange"
+
+      # List all MCP servers
+      - method: GET
+        path: "/api/mcp-servers"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-servers
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, name, transport, command, args, url, status, created_at FROM mcp_servers ORDER BY name ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-servers.rows"
+
+      # Create a new MCP server
+      - method: POST
+        path: "/api/mcp-servers"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [name, command]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO mcp_servers (id, name, transport, command, args, url, status) VALUES (?, ?, ?, ?, ?, ?, 'active')"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  - "{{ default \"stdio\" (step \"parse-request\" \"body\" \"transport\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"command\" }}"
+                  - "{{ default \"[]\" (step \"parse-request\" \"body\" \"args\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"url\") }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  name: "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  status: "active"
+
+      # Update an MCP server
+      - method: PATCH
+        path: "/api/mcp-servers/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: update
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE mcp_servers SET name = COALESCE(NULLIF(?, ''), name), transport = COALESCE(NULLIF(?, ''), transport), command = COALESCE(NULLIF(?, ''), command), args = COALESCE(NULLIF(?, ''), args), url = COALESCE(NULLIF(?, ''), url), status = COALESCE(NULLIF(?, ''), status) WHERE id = ?"
+                params:
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"name\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"transport\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"command\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"args\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"url\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"status\") }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  success: true
+
+      # Delete an MCP server
+      - method: DELETE
+        path: "/api/mcp-servers/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM mcp_servers WHERE id = ?"
+                params:
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  success: true
+
+      # Reload MCP server connections
+      - method: POST
+        path: "/api/mcp-servers/reload"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: reload
+              type: step.mcp_reload
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.reload"
+
+      # List all transcripts
+      - method: GET
+        path: "/api/transcripts"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-transcripts
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts ORDER BY created_at DESC LIMIT 200"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-transcripts.rows"
+
+      # Get transcripts for an agent
+      - method: GET
+        path: "/api/teams"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-teams
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT DISTINCT team_id as id, team_id as name FROM agents WHERE team_id != '' ORDER BY team_id ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-teams.rows"
+
+      # List messages (most recent first, limit 100)
+      - method: GET
+        path: "/api/messages"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-messages
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, type, from_agent, to_agent, team_id, subject, content, reply_to, metadata, created_at FROM messages ORDER BY created_at DESC LIMIT 100"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-messages.rows"
+
+      # Send a message between agents
+      - method: POST
+        path: "/api/messages"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [to, content]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO messages (id, type, from_agent, to_agent, subject, content, created_at) VALUES (?, 'direct', ?, ?, ?, ?, datetime('now'))"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"from\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"to\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"subject\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"content\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  sent: true
+
+      # List all webhooks (auth required)
+      - method: GET
+        path: "/api/webhooks"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-webhooks
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, source, name, secret_name, filter, task_template, enabled, created_at FROM webhooks ORDER BY created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-webhooks.rows"
+
+      # Create a new webhook (auth required)
+      - method: POST
+        path: "/api/webhooks"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [name]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+                  now: "{{ now }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO webhooks (id, source, name, secret_name, filter, task_template, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ default \"generic\" (step \"parse-request\" \"body\" \"source\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"secret_name\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"filter\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"task_template\") }}"
+                  - "{{ .steps.prepare.now }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  name: "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  source: "{{ default \"generic\" (step \"parse-request\" \"body\" \"source\") }}"
+                  enabled: true
+
+      # Delete a webhook (auth required)
+      - method: DELETE
+        path: "/api/webhooks/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete-webhook
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM webhooks WHERE id = ?"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  deleted: true
+
+      # Receive an inbound webhook (no auth — external services call this)
+      - method: POST
+        path: "/api/webhooks/receive/{source}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [source]
+            - name: process-webhook
+              type: step.webhook_process
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.process-webhook"
+
+      # List pending approvals
+      - method: GET
+        path: "/api/approvals"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-approvals
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, action, reason, details, status, reviewer_comment, timeout_minutes, created_at, resolved_at FROM approvals WHERE status = 'pending' ORDER BY created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-approvals.rows"
+
+      # Approve a pending approval
+      - method: POST
+        path: "/api/approvals/{id}/approve"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: resolve
+              type: step.approval_resolve
+              config:
+                action: approve
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.resolve"
+
+      # Reject a pending approval
+      - method: POST
+        path: "/api/approvals/{id}/reject"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: resolve
+              type: step.approval_resolve
+              config:
+                action: reject
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.resolve"
+
+      # List pending human requests
+      - method: GET
+        path: "/api/requests"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-requests
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, request_type, title, description, urgency, status, response_data, response_comment, resolved_by, timeout_minutes, metadata, created_at, resolved_at FROM human_requests WHERE status = 'pending' ORDER BY CASE urgency WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 END, created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-requests.rows"
+
+      # List all human requests (any status)
+      - method: GET
+        path: "/api/requests/all"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-all
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, request_type, title, description, urgency, status, response_data, response_comment, resolved_by, timeout_minutes, metadata, created_at, resolved_at FROM human_requests ORDER BY created_at DESC LIMIT 100"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-all.rows"
+
+      # Get a single human request by ID
+      - method: GET
+        path: "/api/requests/{id}"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-request
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, task_id, project_id, request_type, title, description, urgency, status, response_data, response_comment, resolved_by, timeout_minutes, metadata, created_at, resolved_at FROM human_requests WHERE id = ?"
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
+                mode: single
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-request.row"
+
+      # Resolve a human request (provide the requested data)
+      - method: POST
+        path: "/api/requests/{id}/resolve"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: resolve
+              type: step.human_request_resolve
+              config:
+                action: resolve
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.resolve"
+
+      # Cancel a human request
+      - method: POST
+        path: "/api/requests/{id}/cancel"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: cancel
+              type: step.human_request_resolve
+              config:
+                action: cancel
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.cancel"
+
+      - method: GET
+        path: "/api/tool-policies"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-policies
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, scope, scope_id, tool_pattern, action, created_at FROM tool_policies ORDER BY created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-policies.rows"
+
+      # Create a tool policy
+      - method: POST
+        path: "/api/tool-policies"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [tool_pattern, action]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO tool_policies (id, scope, scope_id, tool_pattern, action) VALUES (?, ?, ?, ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ default \"global\" (step \"parse-request\" \"body\" \"scope\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"scope_id\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"tool_pattern\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"action\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  created: true
+
+      # Delete a tool policy
+      - method: DELETE
+        path: "/api/tool-policies/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM tool_policies WHERE id = ?"
+                params:
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  success: true
+
+      # Run security audit and return findings report
+      - method: POST
+        path: "/api/security/audit"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: run-audit
+              type: step.security_audit
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.run-audit"
+
+      # List all pending test interactions
+      - method: GET
+        path: "/api/test/interactions"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: list-interactions
+              type: step.test_interact
+              config:
+                operation: list_pending
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-interactions"
+
+      # Get a specific pending test interaction with full messages and tools
+      - method: GET
+        path: "/api/test/interactions/{id}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: get-interaction
+              type: step.test_interact
+              config:
+                operation: get_interaction
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-interaction"
+
+      # Submit a response for a pending test interaction
+      - method: POST
+        path: "/api/test/interactions/{id}/respond"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+            - name: submit-response
+              type: step.test_interact
+              config:
+                operation: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.submit-response"

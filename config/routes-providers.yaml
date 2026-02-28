@@ -1,0 +1,263 @@
+# Provider Routes
+# Auto-split from ratchet.yaml for maintainability
+
+workflows:
+  http-ratchet-providers:
+    router: ratchet-router
+    server: ratchet-server
+    routes:
+      - method: GET
+        path: "/api/providers"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: list-providers
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, alias, type, model, base_url, secret_name, max_tokens, settings, is_default, status, created_at, updated_at FROM llm_providers ORDER BY created_at ASC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-providers.rows"
+
+      # Create a new provider
+      - method: POST
+        path: "/api/providers"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: validate
+              type: step.validate
+              config:
+                strategy: required_fields
+                required_fields: [alias, type]
+                source: "steps.parse-request.body"
+            - name: prepare
+              type: step.set
+              config:
+                values:
+                  id: "{{ uuidv4 }}"
+                  now: "{{ now }}"
+            - name: insert
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO llm_providers (id, alias, type, model, base_url, secret_name, max_tokens, settings, is_default, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'unchecked', ?, ?)"
+                params:
+                  - "{{ .steps.prepare.id }}"
+                  - "{{ step \"parse-request\" \"body\" \"alias\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"type\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"model\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"base_url\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"secret_name\") }}"
+                  - "{{ default 0 (step \"parse-request\" \"body\" \"max_tokens\") }}"
+                  - "{{ default \"{}\" (step \"parse-request\" \"body\" \"settings\") }}"
+                  - "{{ .steps.prepare.now }}"
+                  - "{{ .steps.prepare.now }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: "{{ .steps.prepare.id }}"
+                  alias: "{{ step \"parse-request\" \"body\" \"alias\" }}"
+                  type: "{{ step \"parse-request\" \"body\" \"type\" }}"
+                  status: "unchecked"
+
+      # Get single provider by alias
+      - method: GET
+        path: "/api/providers/{alias}"
+        handler: ratchet-queries
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [alias]
+            - name: get-provider
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, alias, type, model, base_url, secret_name, max_tokens, settings, is_default, status, created_at, updated_at FROM llm_providers WHERE alias = ?"
+                params: ["{{ step \"parse-request\" \"path_params\" \"alias\" }}"]
+                mode: single
+            - name: check-found
+              type: step.conditional
+              config:
+                field: "steps.get-provider.found"
+                routes:
+                  "false": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.get-provider.row"
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "provider not found"
+
+      # Update a provider
+      - method: PATCH
+        path: "/api/providers/{alias}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [alias]
+                parse_body: true
+            - name: update-provider
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE llm_providers SET model = COALESCE(NULLIF(?, ''), model), base_url = COALESCE(NULLIF(?, ''), base_url), secret_name = COALESCE(NULLIF(?, ''), secret_name), settings = COALESCE(NULLIF(?, ''), settings), status = COALESCE(NULLIF(?, ''), status), updated_at = datetime('now') WHERE alias = ?"
+                params:
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"model\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"base_url\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"secret_name\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"settings\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"status\") }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"alias\" }}"
+            - name: check-affected
+              type: step.conditional
+              config:
+                field: "steps.update-provider.affected_rows"
+                routes:
+                  "0": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  updated: true
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "provider not found"
+
+      # Delete a provider
+      - method: DELETE
+        path: "/api/providers/{alias}"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [alias]
+            - name: delete-provider
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM llm_providers WHERE alias = ?"
+                params: ["{{ step \"parse-request\" \"path_params\" \"alias\" }}"]
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  deleted: true
+
+      # Set a provider as default
+      - method: POST
+        path: "/api/providers/{alias}/default"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [alias]
+            - name: clear-defaults
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE llm_providers SET is_default = 0, updated_at = datetime('now')"
+            - name: set-default
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE llm_providers SET is_default = 1, updated_at = datetime('now') WHERE alias = ?"
+                params: ["{{ step \"parse-request\" \"path_params\" \"alias\" }}"]
+            - name: check-affected
+              type: step.conditional
+              config:
+                field: "steps.set-default.affected_rows"
+                routes:
+                  "0": not-found
+                default: respond
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  default: true
+            - name: not-found
+              type: step.json_response
+              config:
+                status: 404
+                body:
+                  error: "provider not found"
+
+      # Test provider connection
+      - method: POST
+        path: "/api/providers/{alias}/test"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [alias]
+            - name: test-connection
+              type: step.provider_test
+              config:
+                alias: "{{ step \"parse-request\" \"path_params\" \"alias\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.test-connection"
+
+      # List available models for a provider type
+      - method: POST
+        path: "/api/providers/models"
+        handler: ratchet-commands
+        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+            - name: list-models
+              type: step.provider_models
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-models"
+
+      # List all secrets (key names only)

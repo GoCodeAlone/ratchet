@@ -1,0 +1,149 @@
+# Core Modules
+# Infrastructure modules for the Ratchet server
+
+requires:
+  plugins:
+    - name: ratchet
+      version: ">=1.0.0"
+
+modules:
+  # --- HTTP server ---
+  - name: ratchet-server
+    type: http.server
+    config:
+      address: ":9090"
+      readTimeout: "15s"
+      writeTimeout: "15s"
+
+  # --- HTTP router ---
+  - name: ratchet-router
+    type: http.router
+    dependsOn: [ratchet-server]
+
+  # --- CORS middleware ---
+  - name: ratchet-cors
+    type: http.middleware.cors
+    config:
+      allowedOrigins: ["*"]
+      allowedMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+      allowedHeaders: ["Content-Type", "Authorization"]
+    dependsOn: [ratchet-router]
+
+  # --- Rate limiter ---
+  - name: ratchet-ratelimit
+    type: http.middleware.ratelimit
+    config:
+      requestsPerMinute: 300
+      burstSize: 50
+    dependsOn: [ratchet-cors]
+
+  # --- Auth middleware (JWT Bearer token check) ---
+  - name: ratchet-auth-middleware
+    type: http.middleware.auth
+    config:
+      authType: Bearer
+      secret: "ratchet-dev-secret-change-me"
+      excludePaths:
+        - "/api/auth/login"
+        - "/api/status"
+        - "/events"
+        - "/"
+    dependsOn: [ratchet-ratelimit]
+
+  # --- SQLite database ---
+  - name: ratchet-db
+    type: storage.sqlite
+    config:
+      dbPath: "./data/ratchet.db"
+
+  # --- Messaging broker (in-memory, for future inter-agent messaging) ---
+  - name: ratchet-broker
+    type: messaging.broker
+    config:
+      type: memory
+
+  # --- Scheduler (cron job scheduling for scheduled triggers) ---
+  - name: cronScheduler
+    type: ratchet.scheduler
+    config:
+      cronExpression: "* * * * *"
+
+  # --- CQRS generic query handler (for GET/read pipeline dispatch) ---
+  - name: ratchet-queries
+    type: api.query
+    dependsOn: [ratchet-router]
+
+  # --- CQRS generic command handler (for POST/PUT/PATCH/DELETE pipeline dispatch) ---
+  - name: ratchet-commands
+    type: api.command
+    dependsOn: [ratchet-router]
+
+  # --- AI provider (mock for development; swap provider: anthropic for production) ---
+  # For interactive QA testing, set provider: test, test_mode: http, timeout: 300
+  - name: ratchet-ai
+    type: ratchet.ai_provider
+    config:
+      provider: mock
+      responses:
+        - "Task acknowledged. Analyzing the problem..."
+        - "I've identified the key issues. Here's my approach..."
+        - "Implementation complete. The solution addresses all requirements."
+        - "Running verification steps to confirm correctness..."
+        - "All checks passed. Reporting back to the team."
+      agents:
+        - id: orchestrator
+          name: Orchestrator
+          role: lead
+          system_prompt: "You are the lead orchestrator agent. Plan work, delegate tasks to team members, and ensure forward progress. Communicate clearly with your team and track task completion."
+          provider: ""
+          model: ""
+          team_id: alpha
+          is_lead: true
+        - id: developer
+          name: Developer
+          role: developer
+          system_prompt: "You are a software developer agent. Write clean, tested, well-documented code. Ask for clarification when requirements are ambiguous. Report progress to the orchestrator."
+          provider: ""
+          model: ""
+          team_id: alpha
+          is_lead: false
+        - id: reviewer
+          name: Reviewer
+          role: reviewer
+          system_prompt: "You are a code reviewer agent. Review code for correctness, performance, security issues, and style. Provide constructive feedback and approve changes when ready."
+          provider: ""
+          model: ""
+          team_id: alpha
+          is_lead: false
+
+  # --- SSE hub (real-time Server-Sent Events for the UI) ---
+  - name: ratchet-sse
+    type: ratchet.sse_hub
+    config:
+      path: "/events"
+    dependsOn: [ratchet-server]
+
+  # --- MCP Client (connects to external MCP servers) ---
+  - name: ratchet-mcp-client
+    type: ratchet.mcp_client
+    config:
+      servers: []
+    dependsOn: [ratchet-db]
+
+  # --- MCP Server (exposes Ratchet APIs as MCP tools) ---
+  - name: ratchet-mcp-server
+    type: ratchet.mcp_server
+    config:
+      path: "/mcp"
+    dependsOn: [ratchet-server, ratchet-db]
+
+  # --- Static file server (serves React UI) ---
+  - name: ratchet-ui
+    type: static.fileserver
+    config:
+      root: "./ui/dist"
+      prefix: "/"
+      spaFallback: true
+      cacheMaxAge: 0
+      router: ratchet-router
+    dependsOn: [ratchet-router]
