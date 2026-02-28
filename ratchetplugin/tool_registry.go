@@ -3,6 +3,7 @@ package ratchetplugin
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 
 	"github.com/GoCodeAlone/ratchet/plugin"
@@ -113,12 +114,15 @@ func (tr *ToolRegistry) Execute(ctx context.Context, name string, args map[strin
 		return nil, fmt.Errorf("tool %q not found in registry", name)
 	}
 
-	if pe != nil {
-		agentID := agentIDFromToolCtx(ctx)
-		teamID := TeamIDFromContext(ctx)
-		if allowed, reason := pe.IsAllowed(ctx, name, agentID, teamID); !allowed {
-			return nil, fmt.Errorf("tool %q denied by policy: %s", name, reason)
-		}
+	if pe == nil {
+		log.Printf("warning: no tool policy engine configured, denying tool execution for %q", name)
+		return nil, fmt.Errorf("tool %q denied: no tool policy engine configured", name)
+	}
+
+	agentID := agentIDFromToolCtx(ctx)
+	teamID := TeamIDFromContext(ctx)
+	if allowed, reason := pe.IsAllowed(ctx, name, agentID, teamID); !allowed {
+		return nil, fmt.Errorf("tool %q denied by policy: %s", name, reason)
 	}
 
 	return t.Execute(ctx, args)

@@ -52,12 +52,14 @@ var toolGroups = map[string][]string{
 
 // ToolPolicyEngine evaluates tool access policies stored in SQLite.
 type ToolPolicyEngine struct {
-	db *sql.DB
+	db            *sql.DB
+	DefaultPolicy PolicyAction // "allow" or "deny"; defaults to "deny" (fail-closed)
 }
 
 // NewToolPolicyEngine creates a new ToolPolicyEngine backed by the given DB.
+// The default policy is "deny" (fail-closed) when no matching policies exist.
 func NewToolPolicyEngine(db *sql.DB) *ToolPolicyEngine {
-	return &ToolPolicyEngine{db: db}
+	return &ToolPolicyEngine{db: db, DefaultPolicy: PolicyDeny}
 }
 
 // InitTable creates the tool_policies table if it does not already exist.
@@ -123,12 +125,11 @@ func (tpe *ToolPolicyEngine) ListPolicies(ctx context.Context) ([]ToolPolicy, er
 //  1. Expand group patterns to concrete tool names.
 //  2. Collect all policies that match the tool name (global, team, agent).
 //  3. If ANY matching policy denies → return false.
-//  4. If no explicit policy exists → default allow.
+//  4. If no explicit policy exists → apply DefaultPolicy ("deny" by default, fail-closed).
 func (tpe *ToolPolicyEngine) IsAllowed(ctx context.Context, toolName string, agentID string, teamID string) (bool, string) {
 	policies, err := tpe.ListPolicies(ctx)
 	if err != nil {
-		// On DB error, fail open (default allow) to avoid blocking all tool calls.
-		return true, "policy engine error; defaulting to allow"
+		return false, "policy engine error; defaulting to deny"
 	}
 
 	var matchingPolicies []ToolPolicy
@@ -150,7 +151,10 @@ func (tpe *ToolPolicyEngine) IsAllowed(ctx context.Context, toolName string, age
 	}
 
 	if len(matchingPolicies) == 0 {
-		return true, "no policy; defaulting to allow"
+		if tpe.DefaultPolicy == PolicyAllow {
+			return true, "no policy; defaulting to allow"
+		}
+		return false, "no policy; defaulting to deny"
 	}
 
 	// Deny-wins: if any matching policy denies, it is denied.
@@ -202,11 +206,18 @@ func policyMatchesTool(pattern, toolName string) bool {
 }
 
 // toolPolicyEngineHook creates a ToolPolicyEngine and registers it in the service registry.
+// The default_policy can be set via a module config entry with type "ratchet.tool_policy_engine":
+//
+//	modules:
+//	  - name: tool-policy
+//	    type: ratchet.tool_policy_engine
+//	    config:
+//	      default_policy: allow   # "deny" is the default (fail-closed)
 func toolPolicyEngineHook() plugin.WiringHook {
 	return plugin.WiringHook{
 		Name:     "ratchet.tool_policy_engine",
 		Priority: 81,
-		Hook: func(app modular.Application, _ *config.WorkflowConfig) error {
+		Hook: func(app modular.Application, cfg *config.WorkflowConfig) error {
 			var db *sql.DB
 			if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
 				if dbp, ok := svc.(module.DBProvider); ok {
@@ -218,6 +229,19 @@ func toolPolicyEngineHook() plugin.WiringHook {
 			}
 
 			engine := NewToolPolicyEngine(db)
+
+			// Allow default_policy to be overridden via module config.
+			if cfg != nil {
+				for _, mod := range cfg.Modules {
+					if mod.Type == "ratchet.tool_policy_engine" {
+						if v, ok := mod.Config["default_policy"].(string); ok && v == string(PolicyAllow) {
+							engine.DefaultPolicy = PolicyAllow
+						}
+						break
+					}
+				}
+			}
+
 			_ = app.RegisterService("ratchet-tool-policy-engine", engine)
 			return nil
 		},

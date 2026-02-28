@@ -24,13 +24,26 @@ func newTestPolicyEngine(t *testing.T) *ToolPolicyEngine {
 	return engine
 }
 
-func TestToolPolicy_DefaultAllow(t *testing.T) {
+func TestToolPolicy_DefaultDeny(t *testing.T) {
 	engine := newTestPolicyEngine(t)
 	ctx := context.Background()
 
+	// With no policies, the default is deny (fail-closed).
+	allowed, reason := engine.IsAllowed(ctx, "file_read", "agent-1", "team-1")
+	if allowed {
+		t.Errorf("expected default deny (fail-closed), got allowed: %s", reason)
+	}
+}
+
+func TestToolPolicy_DefaultAllowWhenConfigured(t *testing.T) {
+	engine := newTestPolicyEngine(t)
+	engine.DefaultPolicy = PolicyAllow
+	ctx := context.Background()
+
+	// With no policies and default_policy=allow, tool should be allowed.
 	allowed, reason := engine.IsAllowed(ctx, "file_read", "agent-1", "team-1")
 	if !allowed {
-		t.Errorf("expected default allow, got denied: %s", reason)
+		t.Errorf("expected allow when DefaultPolicy=allow and no policies: %s", reason)
 	}
 }
 
@@ -174,10 +187,10 @@ func TestToolPolicy_GroupExpansion(t *testing.T) {
 		}
 	}
 
-	// A non-fs tool should still be allowed
+	// shell_exec has no matching policy — default deny applies.
 	allowed, reason := engine.IsAllowed(ctx, "shell_exec", "agent-1", "team-1")
-	if !allowed {
-		t.Errorf("expected shell_exec to be allowed (not in group:fs), got denied: %s", reason)
+	if allowed {
+		t.Errorf("expected shell_exec to be denied by default (no policy), got allowed: %s", reason)
 	}
 }
 
@@ -198,10 +211,10 @@ func TestToolPolicy_WildcardPattern(t *testing.T) {
 		t.Errorf("expected mcp tool to be denied via wildcard, got allowed: %s", reason)
 	}
 
-	// Non-MCP tool should still be allowed
+	// file_read has no matching policy — default deny applies.
 	allowed, _ = engine.IsAllowed(ctx, "file_read", "agent-1", "team-1")
-	if !allowed {
-		t.Errorf("expected file_read to be allowed when only MCP is denied")
+	if allowed {
+		t.Errorf("expected file_read to be denied by default (no matching policy)")
 	}
 }
 
@@ -218,16 +231,16 @@ func TestToolPolicy_TeamScopeOnlyMatchesCorrectTeam(t *testing.T) {
 		Action:      PolicyDeny,
 	})
 
-	// team-1 should be denied
+	// team-1 should be denied by explicit policy
 	allowed, _ := engine.IsAllowed(ctx, "shell_exec", "agent-1", "team-1")
 	if allowed {
 		t.Errorf("expected shell_exec to be denied for team-1")
 	}
 
-	// team-2 should be allowed (no matching policy)
+	// team-2 has no matching policy — default deny applies.
 	allowed, _ = engine.IsAllowed(ctx, "shell_exec", "agent-2", "team-2")
-	if !allowed {
-		t.Errorf("expected shell_exec to be allowed for team-2 (no policy)")
+	if allowed {
+		t.Errorf("expected shell_exec to be denied for team-2 (no policy, default deny)")
 	}
 }
 
@@ -260,10 +273,10 @@ func TestToolPolicy_ListAndRemove(t *testing.T) {
 		t.Errorf("expected 0 policies after removal, got %d", len(policies))
 	}
 
-	// Should default to allow after removal
+	// Default deny applies after all policies are removed.
 	allowed, _ := engine.IsAllowed(ctx, "file_read", "agent-1", "team-1")
-	if !allowed {
-		t.Errorf("expected default allow after all policies removed")
+	if allowed {
+		t.Errorf("expected default deny after all policies removed")
 	}
 }
 
@@ -284,5 +297,16 @@ func TestToolPolicy_AllStarWildcard(t *testing.T) {
 		if allowed {
 			t.Errorf("expected %q to be denied by *, got allowed: %s", toolName, reason)
 		}
+	}
+}
+
+func TestToolRegistry_NilPolicyEngineDenies(t *testing.T) {
+	registry := NewToolRegistry()
+	// No policy engine set — registry.policyEngine is nil.
+
+	ctx := context.Background()
+	_, err := registry.Execute(ctx, "file_read", nil)
+	if err == nil {
+		t.Fatal("expected error when no policy engine configured, got nil")
 	}
 }
