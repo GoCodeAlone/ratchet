@@ -1,6 +1,11 @@
 # Project Routes
 # Auto-split from ratchet.yaml for maintainability
 
+# Middleware anchors (DRY — change once, applies to all routes)
+_anchors:
+  auth_mw: &auth_mw [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+  public_mw: &public_mw [ratchet-cors, ratchet-ratelimit]
+
 workflows:
   http-ratchet-projects:
     router: ratchet-router
@@ -9,7 +14,7 @@ workflows:
       - method: GET
         path: "/api/projects"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-projects
@@ -28,7 +33,7 @@ workflows:
       - method: POST
         path: "/api/projects"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -77,7 +82,7 @@ workflows:
       - method: GET
         path: "/api/projects/{id}"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -114,7 +119,7 @@ workflows:
       - method: PATCH
         path: "/api/projects/{id}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -144,7 +149,7 @@ workflows:
       - method: GET
         path: "/api/projects/{id}/tasks"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -168,7 +173,7 @@ workflows:
       - method: GET
         path: "/api/projects/{id}/transcripts"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -192,7 +197,7 @@ workflows:
       - method: POST
         path: "/api/projects/{id}/repos"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -236,7 +241,7 @@ workflows:
       - method: GET
         path: "/api/projects/{id}/repos"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -260,7 +265,7 @@ workflows:
       - method: DELETE
         path: "/api/projects/{id}/repos/{repoId}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -286,7 +291,7 @@ workflows:
       - method: POST
         path: "/api/projects/{id}/container/start"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -312,7 +317,7 @@ workflows:
       - method: POST
         path: "/api/projects/{id}/container/stop"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -336,7 +341,7 @@ workflows:
       - method: GET
         path: "/api/projects/{id}/container/status"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request

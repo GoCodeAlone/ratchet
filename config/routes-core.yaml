@@ -1,6 +1,11 @@
 # Core Routes
 # Auto-split from ratchet.yaml for maintainability
 
+# Middleware anchors (DRY — change once, applies to all routes)
+_anchors:
+  auth_mw: &auth_mw [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+  public_mw: &public_mw [ratchet-cors, ratchet-ratelimit]
+
 workflows:
   http-ratchet-core:
     router: ratchet-router
@@ -9,7 +14,7 @@ workflows:
       - method: GET
         path: "/api/status"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit]
+        middlewares: *public_mw
         pipeline:
           steps:
             - name: respond
@@ -25,7 +30,7 @@ workflows:
       - method: POST
         path: "/api/auth/login"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit]
+        middlewares: *public_mw
         pipeline:
           steps:
             - name: parse-request
@@ -62,7 +67,7 @@ workflows:
       - method: GET
         path: "/api/info"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: count-agents
@@ -99,7 +104,7 @@ workflows:
       - method: GET
         path: "/api/version"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: respond
@@ -112,7 +117,7 @@ workflows:
       - method: GET
         path: "/api/auth/me"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: respond

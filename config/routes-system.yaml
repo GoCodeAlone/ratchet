@@ -1,6 +1,11 @@
 # System Routes
 # Auto-split from ratchet.yaml for maintainability
 
+# Middleware anchors (DRY — change once, applies to all routes)
+_anchors:
+  auth_mw: &auth_mw [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+  public_mw: &public_mw [ratchet-cors, ratchet-ratelimit]
+
 workflows:
   http-ratchet-system:
     router: ratchet-router
@@ -9,7 +14,7 @@ workflows:
       - method: GET
         path: "/api/secrets"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-secrets
@@ -26,7 +31,7 @@ workflows:
       - method: PUT
         path: "/api/secrets/{key}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -50,7 +55,7 @@ workflows:
       - method: DELETE
         path: "/api/secrets/{key}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -72,7 +77,7 @@ workflows:
       - method: GET
         path: "/api/vault/status"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: get-status
@@ -89,7 +94,7 @@ workflows:
       - method: POST
         path: "/api/vault/test"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -110,7 +115,7 @@ workflows:
       - method: POST
         path: "/api/vault/configure"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -131,7 +136,7 @@ workflows:
       - method: POST
         path: "/api/vault/migrate"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: migrate-vault
@@ -148,7 +153,7 @@ workflows:
       - method: POST
         path: "/api/vault/reset"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: reset-vault
@@ -165,7 +170,7 @@ workflows:
       - method: POST
         path: "/api/oauth/exchange"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -184,7 +189,7 @@ workflows:
       - method: GET
         path: "/api/mcp-servers"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-servers
@@ -203,7 +208,7 @@ workflows:
       - method: POST
         path: "/api/mcp-servers"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -246,7 +251,7 @@ workflows:
       - method: PATCH
         path: "/api/mcp-servers/{id}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -278,7 +283,7 @@ workflows:
       - method: DELETE
         path: "/api/mcp-servers/{id}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -303,7 +308,7 @@ workflows:
       - method: POST
         path: "/api/mcp-servers/reload"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: reload
@@ -318,7 +323,7 @@ workflows:
       - method: GET
         path: "/api/transcripts"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-transcripts
@@ -337,7 +342,7 @@ workflows:
       - method: GET
         path: "/api/teams"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-teams
@@ -356,7 +361,7 @@ workflows:
       - method: GET
         path: "/api/messages"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-messages
@@ -375,7 +380,7 @@ workflows:
       - method: POST
         path: "/api/messages"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -416,7 +421,7 @@ workflows:
       - method: GET
         path: "/api/webhooks"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-webhooks
@@ -435,7 +440,7 @@ workflows:
       - method: POST
         path: "/api/webhooks"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -481,7 +486,7 @@ workflows:
       - method: DELETE
         path: "/api/webhooks/{id}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -505,7 +510,7 @@ workflows:
       - method: POST
         path: "/api/webhooks/receive/{source}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit]
+        middlewares: *public_mw
         pipeline:
           steps:
             - name: parse-request
@@ -524,7 +529,7 @@ workflows:
       - method: GET
         path: "/api/approvals"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-approvals
@@ -543,7 +548,7 @@ workflows:
       - method: POST
         path: "/api/approvals/{id}/approve"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -565,7 +570,7 @@ workflows:
       - method: POST
         path: "/api/approvals/{id}/reject"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -587,7 +592,7 @@ workflows:
       - method: GET
         path: "/api/requests"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-requests
@@ -606,7 +611,7 @@ workflows:
       - method: GET
         path: "/api/requests/all"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-all
@@ -625,7 +630,7 @@ workflows:
       - method: GET
         path: "/api/requests/{id}"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -649,7 +654,7 @@ workflows:
       - method: POST
         path: "/api/requests/{id}/resolve"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -671,7 +676,7 @@ workflows:
       - method: POST
         path: "/api/requests/{id}/cancel"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -692,7 +697,7 @@ workflows:
       - method: GET
         path: "/api/tool-policies"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-policies
@@ -711,7 +716,7 @@ workflows:
       - method: POST
         path: "/api/tool-policies"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -752,7 +757,7 @@ workflows:
       - method: DELETE
         path: "/api/tool-policies/{id}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -777,7 +782,7 @@ workflows:
       - method: POST
         path: "/api/security/audit"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: run-audit
@@ -792,7 +797,7 @@ workflows:
       - method: GET
         path: "/api/test/interactions"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit]
+        middlewares: *public_mw
         pipeline:
           steps:
             - name: list-interactions
@@ -809,7 +814,7 @@ workflows:
       - method: GET
         path: "/api/test/interactions/{id}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit]
+        middlewares: *public_mw
         pipeline:
           steps:
             - name: parse-request
@@ -830,7 +835,7 @@ workflows:
       - method: POST
         path: "/api/test/interactions/{id}/respond"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit]
+        middlewares: *public_mw
         pipeline:
           steps:
             - name: parse-request

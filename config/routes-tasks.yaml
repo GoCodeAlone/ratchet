@@ -1,6 +1,11 @@
 # Task Routes
 # Auto-split from ratchet.yaml for maintainability
 
+# Middleware anchors (DRY — change once, applies to all routes)
+_anchors:
+  auth_mw: &auth_mw [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+  public_mw: &public_mw [ratchet-cors, ratchet-ratelimit]
+
 workflows:
   http-ratchet-tasks:
     router: ratchet-router
@@ -9,7 +14,7 @@ workflows:
       - method: GET
         path: "/api/tasks"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: list-tasks
@@ -28,7 +33,7 @@ workflows:
       - method: POST
         path: "/api/tasks"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -76,7 +81,7 @@ workflows:
       - method: GET
         path: "/api/tasks/{id}"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -113,7 +118,7 @@ workflows:
       - method: PATCH
         path: "/api/tasks/{id}"
         handler: ratchet-commands
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
@@ -157,7 +162,7 @@ workflows:
       - method: GET
         path: "/api/tasks/{id}/transcripts"
         handler: ratchet-queries
-        middlewares: [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+        middlewares: *auth_mw
         pipeline:
           steps:
             - name: parse-request
