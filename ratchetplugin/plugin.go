@@ -105,9 +105,66 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 	}
 }
 
-// ModuleSchemas returns schema definitions for the UI.
+// ModuleSchemas returns schema definitions for IDE completions and config validation.
 func (p *RatchetPlugin) ModuleSchemas() []*schema.ModuleSchema {
-	return nil
+	return []*schema.ModuleSchema{
+		{
+			Type:        "ratchet.ai_provider",
+			Label:       "AI Provider",
+			Category:    "AI",
+			Description: "Wraps an AI provider (mock, test, anthropic, openai) as a module for agent execution.",
+			ConfigFields: []schema.ConfigFieldDef{
+				{Key: "provider", Label: "Provider Type", Type: schema.FieldTypeSelect, Options: []string{"mock", "test", "anthropic", "openai"}, DefaultValue: "mock", Description: "AI provider backend"},
+				{Key: "model", Label: "Model", Type: schema.FieldTypeString, Description: "Model identifier (e.g., claude-sonnet-4-20250514)"},
+				{Key: "responses", Label: "Mock Responses", Type: schema.FieldTypeArray, ArrayItemType: "string", Description: "Scripted responses for mock provider"},
+				{Key: "test_mode", Label: "Test Mode", Type: schema.FieldTypeSelect, Options: []string{"scripted", "channel", "http"}, DefaultValue: "scripted", Description: "Test provider mode"},
+				{Key: "scenario_file", Label: "Scenario File", Type: schema.FieldTypeFilePath, Description: "YAML file with test scenario steps"},
+				{Key: "loop", Label: "Loop Responses", Type: schema.FieldTypeBool, DefaultValue: false, Description: "Loop scripted responses when exhausted"},
+				{Key: "timeout", Label: "Timeout", Type: schema.FieldTypeDuration, Description: "Timeout for test provider HTTP mode"},
+				{Key: "agents", Label: "Agent Seeds", Type: schema.FieldTypeJSON, Description: "Array of agent definitions to seed on startup"},
+			},
+			DefaultConfig: map[string]any{"provider": "mock"},
+		},
+		{
+			Type:        "ratchet.sse_hub",
+			Label:       "SSE Hub",
+			Category:    "Realtime",
+			Description: "Server-Sent Events hub for real-time dashboard updates.",
+			ConfigFields: []schema.ConfigFieldDef{
+				{Key: "path", Label: "Endpoint Path", Type: schema.FieldTypeString, DefaultValue: "/events", Description: "HTTP path for SSE connections"},
+			},
+			DefaultConfig: map[string]any{"path": "/events"},
+		},
+		{
+			Type:        "ratchet.scheduler",
+			Label:       "Scheduler",
+			Category:    "Scheduling",
+			Description: "Cron scheduler for periodic agent task polling.",
+			ConfigFields: []schema.ConfigFieldDef{
+				{Key: "cronExpression", Label: "Cron Expression", Type: schema.FieldTypeString, DefaultValue: "* * * * *", Description: "Standard cron expression for schedule interval"},
+			},
+			DefaultConfig: map[string]any{"cronExpression": "* * * * *"},
+		},
+		{
+			Type:        "ratchet.mcp_client",
+			Label:       "MCP Client",
+			Category:    "Integration",
+			Description: "Connects to external MCP servers via stdio and registers discovered tools.",
+			ConfigFields: []schema.ConfigFieldDef{
+				{Key: "servers", Label: "MCP Servers", Type: schema.FieldTypeJSON, Description: "Array of MCP server configs with name, command, and args"},
+			},
+		},
+		{
+			Type:        "ratchet.mcp_server",
+			Label:       "MCP Server",
+			Category:    "Integration",
+			Description: "Exposes Ratchet APIs (agents, tasks, projects, messages) as MCP tools over HTTP.",
+			ConfigFields: []schema.ConfigFieldDef{
+				{Key: "path", Label: "Endpoint Path", Type: schema.FieldTypeString, DefaultValue: "/mcp", Description: "HTTP path for MCP JSON-RPC requests"},
+			},
+			DefaultConfig: map[string]any{"path": "/mcp"},
+		},
+	}
 }
 
 // secretsGuardHook creates a SecretGuard and registers it in the service registry.

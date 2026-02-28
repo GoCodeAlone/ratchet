@@ -17,6 +17,11 @@
 # Auth: POST /api/auth/login validates admin/admin credentials and returns a static dev token.
 # For production, replace with auth.jwt + auth.user-store modules.
 
+requires:
+  plugins:
+    - name: ratchet
+      version: ">=1.0.0"
+
 modules:
   # --- HTTP server ---
   - name: ratchet-server
@@ -260,7 +265,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, name, role, system_prompt, provider, model, status, team_id, is_lead, created_at, updated_at FROM agents WHERE id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: single
             - name: check-found
               type: step.conditional
@@ -297,7 +302,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "UPDATE agents SET status = 'active', updated_at = datetime('now') WHERE id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
             - name: check-affected
               type: step.conditional
               config:
@@ -334,7 +339,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "UPDATE agents SET status = 'stopped', updated_at = datetime('now') WHERE id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
             - name: check-affected
               type: step.conditional
               config:
@@ -408,12 +413,12 @@ workflows:
                 query: "INSERT INTO tasks (id, title, description, status, priority, assigned_to, team_id, project_id, parent_id, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, '', ?, ?)"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"title\"}}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"description\") }}"
-                  - "{{ default 1 (index .steps \"parse-request\" \"body\" \"priority\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"assigned_to\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"team_id\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"project_id\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"title\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ default 1 (step \"parse-request\" \"body\" \"priority\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"assigned_to\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"team_id\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"project_id\") }}"
                   - "{{ .steps.prepare.now }}"
                   - "{{ .steps.prepare.now }}"
             - name: respond
@@ -422,7 +427,7 @@ workflows:
                 status: 201
                 body:
                   id: "{{ .steps.prepare.id }}"
-                  title: "{{index .steps \"parse-request\" \"body\" \"title\"}}"
+                  title: "{{ step \"parse-request\" \"body\" \"title\" }}"
                   status: "pending"
                   created_at: "{{ .steps.prepare.now }}"
 
@@ -442,7 +447,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, title, description, status, priority, assigned_to, team_id, project_id, parent_id, depends_on, labels, metadata, result, error, created_at, updated_at, started_at, completed_at FROM tasks WHERE id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: single
             - name: check-found
               type: step.conditional
@@ -481,10 +486,10 @@ workflows:
                 database: ratchet-db
                 query: "UPDATE tasks SET status = ?, assigned_to = ?, result = ?, updated_at = datetime('now') WHERE id = ?"
                 params:
-                  - "{{index .steps \"parse-request\" \"body\" \"status\"}}"
-                  - "{{index .steps \"parse-request\" \"body\" \"assigned_to\"}}"
-                  - "{{index .steps \"parse-request\" \"body\" \"result\"}}"
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{ step \"parse-request\" \"body\" \"status\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"assigned_to\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"result\" }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: check-affected
               type: step.conditional
               config:
@@ -497,8 +502,8 @@ workflows:
               config:
                 status: 200
                 body:
-                  id: "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
-                  status: "{{index .steps \"parse-request\" \"body\" \"status\"}}"
+                  id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  status: "{{ step \"parse-request\" \"body\" \"status\" }}"
                   updated: true
             - name: not-found
               type: step.json_response
@@ -537,12 +542,12 @@ workflows:
                 query: "INSERT INTO agents (id, name, role, system_prompt, provider, model, team_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"role\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"system_prompt\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"provider\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"model\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"team_id\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"role\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"system_prompt\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"provider\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"model\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"team_id\") }}"
                   - "{{ .steps.prepare.now }}"
                   - "{{ .steps.prepare.now }}"
             - name: respond
@@ -551,8 +556,8 @@ workflows:
                 status: 201
                 body:
                   id: "{{ .steps.prepare.id }}"
-                  name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
-                  role: "{{ default \"\" (index .steps \"parse-request\" \"body\" \"role\") }}"
+                  name: "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  role: "{{ default \"\" (step \"parse-request\" \"body\" \"role\") }}"
                   status: "idle"
 
       # Delete an agent
@@ -571,7 +576,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "DELETE FROM agents WHERE id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
             - name: respond
               type: step.json_response
               config:
@@ -597,13 +602,13 @@ workflows:
                 database: ratchet-db
                 query: "UPDATE agents SET name = ?, role = ?, system_prompt = ?, provider = ?, model = ?, team_id = ?, updated_at = datetime('now') WHERE id = ?"
                 params:
-                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"role\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"system_prompt\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"provider\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"model\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"team_id\") }}"
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"role\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"system_prompt\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"provider\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"model\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"team_id\") }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -664,13 +669,13 @@ workflows:
                 query: "INSERT INTO llm_providers (id, alias, type, model, base_url, secret_name, max_tokens, settings, is_default, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'unchecked', ?, ?)"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"alias\"}}"
-                  - "{{index .steps \"parse-request\" \"body\" \"type\"}}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"model\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"base_url\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"secret_name\") }}"
-                  - "{{ default 0 (index .steps \"parse-request\" \"body\" \"max_tokens\") }}"
-                  - "{{ default \"{}\" (index .steps \"parse-request\" \"body\" \"settings\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"alias\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"type\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"model\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"base_url\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"secret_name\") }}"
+                  - "{{ default 0 (step \"parse-request\" \"body\" \"max_tokens\") }}"
+                  - "{{ default \"{}\" (step \"parse-request\" \"body\" \"settings\") }}"
                   - "{{ .steps.prepare.now }}"
                   - "{{ .steps.prepare.now }}"
             - name: respond
@@ -679,8 +684,8 @@ workflows:
                 status: 201
                 body:
                   id: "{{ .steps.prepare.id }}"
-                  alias: "{{index .steps \"parse-request\" \"body\" \"alias\"}}"
-                  type: "{{index .steps \"parse-request\" \"body\" \"type\"}}"
+                  alias: "{{ step \"parse-request\" \"body\" \"alias\" }}"
+                  type: "{{ step \"parse-request\" \"body\" \"type\" }}"
                   status: "unchecked"
 
       # Get single provider by alias
@@ -699,7 +704,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, alias, type, model, base_url, secret_name, max_tokens, settings, is_default, status, created_at, updated_at FROM llm_providers WHERE alias = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"alias\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"alias\" }}"]
                 mode: single
             - name: check-found
               type: step.conditional
@@ -738,12 +743,12 @@ workflows:
                 database: ratchet-db
                 query: "UPDATE llm_providers SET model = COALESCE(NULLIF(?, ''), model), base_url = COALESCE(NULLIF(?, ''), base_url), secret_name = COALESCE(NULLIF(?, ''), secret_name), settings = COALESCE(NULLIF(?, ''), settings), status = COALESCE(NULLIF(?, ''), status), updated_at = datetime('now') WHERE alias = ?"
                 params:
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"model\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"base_url\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"secret_name\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"settings\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"status\") }}"
-                  - "{{index .steps \"parse-request\" \"path_params\" \"alias\"}}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"model\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"base_url\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"secret_name\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"settings\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"status\") }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"alias\" }}"
             - name: check-affected
               type: step.conditional
               config:
@@ -780,7 +785,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "DELETE FROM llm_providers WHERE alias = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"alias\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"alias\" }}"]
             - name: respond
               type: step.json_response
               config:
@@ -809,7 +814,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "UPDATE llm_providers SET is_default = 1, updated_at = datetime('now') WHERE alias = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"alias\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"alias\" }}"]
             - name: check-affected
               type: step.conditional
               config:
@@ -844,7 +849,7 @@ workflows:
             - name: test-connection
               type: step.provider_test
               config:
-                alias: "{{index .steps \"parse-request\" \"path_params\" \"alias\"}}"
+                alias: "{{ step \"parse-request\" \"path_params\" \"alias\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -907,8 +912,8 @@ workflows:
               type: step.secret_manage
               config:
                 action: set
-                key: "{{index .steps \"parse-request\" \"path_params\" \"key\"}}"
-                value: "{{index .steps \"parse-request\" \"body\" \"value\"}}"
+                key: "{{ step \"parse-request\" \"path_params\" \"key\" }}"
+                value: "{{ step \"parse-request\" \"body\" \"value\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -930,7 +935,7 @@ workflows:
               type: step.secret_manage
               config:
                 action: delete
-                key: "{{index .steps \"parse-request\" \"path_params\" \"key\"}}"
+                key: "{{ step \"parse-request\" \"path_params\" \"key\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -1109,18 +1114,18 @@ workflows:
                 query: "INSERT INTO mcp_servers (id, name, transport, command, args, url, status) VALUES (?, ?, ?, ?, ?, ?, 'active')"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
-                  - "{{ default \"stdio\" (index .steps \"parse-request\" \"body\" \"transport\") }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"command\"}}"
-                  - "{{ default \"[]\" (index .steps \"parse-request\" \"body\" \"args\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"url\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  - "{{ default \"stdio\" (step \"parse-request\" \"body\" \"transport\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"command\" }}"
+                  - "{{ default \"[]\" (step \"parse-request\" \"body\" \"args\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"url\") }}"
             - name: respond
               type: step.json_response
               config:
                 status: 201
                 body:
                   id: "{{ .steps.prepare.id }}"
-                  name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  name: "{{ step \"parse-request\" \"body\" \"name\" }}"
                   status: "active"
 
       # Update an MCP server
@@ -1141,13 +1146,13 @@ workflows:
                 database: ratchet-db
                 query: "UPDATE mcp_servers SET name = COALESCE(NULLIF(?, ''), name), transport = COALESCE(NULLIF(?, ''), transport), command = COALESCE(NULLIF(?, ''), command), args = COALESCE(NULLIF(?, ''), args), url = COALESCE(NULLIF(?, ''), url), status = COALESCE(NULLIF(?, ''), status) WHERE id = ?"
                 params:
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"name\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"transport\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"command\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"args\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"url\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"status\") }}"
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"name\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"transport\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"command\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"args\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"url\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"status\") }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -1172,7 +1177,7 @@ workflows:
                 database: ratchet-db
                 query: "DELETE FROM mcp_servers WHERE id = ?"
                 params:
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -1234,7 +1239,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE agent_id = ? ORDER BY created_at ASC"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: list
             - name: respond
               type: step.json_response
@@ -1258,7 +1263,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE task_id = ? ORDER BY created_at ASC"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: list
             - name: respond
               type: step.json_response
@@ -1319,9 +1324,9 @@ workflows:
                 query: "INSERT INTO projects (id, name, description, workspace_spec, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"description\") }}"
-                  - "{{ default \"{}\" (index .steps \"parse-request\" \"body\" \"workspace_spec\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ default \"{}\" (step \"parse-request\" \"body\" \"workspace_spec\") }}"
                   - "{{ .steps.prepare.now }}"
                   - "{{ .steps.prepare.now }}"
             - name: init-workspace
@@ -1335,7 +1340,7 @@ workflows:
                 status: 201
                 body:
                   id: "{{ .steps.prepare.id }}"
-                  name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
+                  name: "{{ step \"parse-request\" \"body\" \"name\" }}"
                   status: "active"
 
       # Get single project
@@ -1354,7 +1359,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, name, description, workspace_path, workspace_spec, status, created_at, updated_at FROM projects WHERE id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: single
             - name: check-found
               type: step.conditional
@@ -1393,11 +1398,11 @@ workflows:
                 database: ratchet-db
                 query: "UPDATE projects SET name = COALESCE(NULLIF(?, ''), name), description = COALESCE(NULLIF(?, ''), description), workspace_spec = COALESCE(NULLIF(?, ''), workspace_spec), status = COALESCE(NULLIF(?, ''), status), updated_at = datetime('now') WHERE id = ?"
                 params:
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"name\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"description\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"workspace_spec\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"status\") }}"
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"name\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"description\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"workspace_spec\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"status\") }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -1421,7 +1426,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, title, description, status, priority, assigned_to, project_id, created_at, updated_at FROM tasks WHERE project_id = ? ORDER BY priority DESC, created_at ASC"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: list
             - name: respond
               type: step.json_response
@@ -1445,7 +1450,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, agent_id, task_id, project_id, iteration, role, content, tool_calls, tool_call_id, redacted, created_at FROM transcripts WHERE project_id = ? ORDER BY created_at ASC"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: list
             - name: respond
               type: step.json_response
@@ -1487,18 +1492,18 @@ workflows:
                 query: "INSERT INTO project_repos (id, project_id, repo_url, branch, auth_token_secret) VALUES (?, ?, ?, ?, ?)"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
-                  - "{{index .steps \"parse-request\" \"body\" \"repo_url\"}}"
-                  - "{{ default \"main\" (index .steps \"parse-request\" \"body\" \"branch\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"auth_token_secret\") }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"repo_url\" }}"
+                  - "{{ default \"main\" (step \"parse-request\" \"body\" \"branch\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"auth_token_secret\") }}"
             - name: respond
               type: step.json_response
               config:
                 status: 201
                 body:
                   id: "{{ .steps.prepare.id }}"
-                  project_id: "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
-                  repo_url: "{{index .steps \"parse-request\" \"body\" \"repo_url\"}}"
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  repo_url: "{{ step \"parse-request\" \"body\" \"repo_url\" }}"
                   status: "pending"
 
       # List repos for project
@@ -1517,7 +1522,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, project_id, repo_url, clone_path, branch, status, last_synced_at, created_at FROM project_repos WHERE project_id = ? ORDER BY created_at ASC"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: list
             - name: respond
               type: step.json_response
@@ -1542,8 +1547,8 @@ workflows:
                 database: ratchet-db
                 query: "DELETE FROM project_repos WHERE id = ? AND project_id = ?"
                 params:
-                  - "{{index .steps \"parse-request\" \"path_params\" \"repoId\"}}"
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{ step \"parse-request\" \"path_params\" \"repoId\" }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -1571,14 +1576,14 @@ workflows:
               type: step.container_control
               config:
                 action: start
-                project_id: "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
-                image: "{{ default \"ubuntu:22.04\" (index .steps \"parse-request\" \"body\" \"image\") }}"
+                project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                image: "{{ default \"ubuntu:22.04\" (step \"parse-request\" \"body\" \"image\") }}"
             - name: respond
               type: step.json_response
               config:
                 status: 200
                 body:
-                  project_id: "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
                   status: "starting"
 
       # Stop workspace container
@@ -1596,13 +1601,13 @@ workflows:
               type: step.container_control
               config:
                 action: stop
-                project_id: "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: respond
               type: step.json_response
               config:
                 status: 200
                 body:
-                  project_id: "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
                   status: "stopping"
 
       # Get container status
@@ -1621,7 +1626,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, project_id, container_id, image, status, compose_file, error_message, created_at, updated_at FROM workspace_containers WHERE project_id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: single
             - name: check-found
               type: step.conditional
@@ -1640,7 +1645,7 @@ workflows:
               config:
                 status: 200
                 body:
-                  project_id: "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
                   status: "none"
 
       # ============================================================
@@ -1718,10 +1723,10 @@ workflows:
                 query: "INSERT INTO messages (id, type, from_agent, to_agent, subject, content, created_at) VALUES (?, 'direct', ?, ?, ?, ?, datetime('now'))"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"from\") }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"to\"}}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"subject\") }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"content\"}}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"from\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"to\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"subject\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"content\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -1783,11 +1788,11 @@ workflows:
                 query: "INSERT INTO webhooks (id, source, name, secret_name, filter, task_template, enabled, created_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{ default \"generic\" (index .steps \"parse-request\" \"body\" \"source\") }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"name\"}}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"secret_name\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"filter\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"task_template\") }}"
+                  - "{{ default \"generic\" (step \"parse-request\" \"body\" \"source\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"secret_name\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"filter\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"task_template\") }}"
                   - "{{ .steps.prepare.now }}"
             - name: respond
               type: step.json_response
@@ -1795,8 +1800,8 @@ workflows:
                 status: 201
                 body:
                   id: "{{ .steps.prepare.id }}"
-                  name: "{{index .steps \"parse-request\" \"body\" \"name\"}}"
-                  source: "{{ default \"generic\" (index .steps \"parse-request\" \"body\" \"source\") }}"
+                  name: "{{ step \"parse-request\" \"body\" \"name\" }}"
+                  source: "{{ default \"generic\" (step \"parse-request\" \"body\" \"source\") }}"
                   enabled: true
 
       # Delete a webhook (auth required)
@@ -1815,7 +1820,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "DELETE FROM webhooks WHERE id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
             - name: respond
               type: step.json_response
               config:
@@ -1858,7 +1863,7 @@ workflows:
               type: step.db_query
               config:
                 database: ratchet-db
-                query: "SELECT id, agent_id, task_id, action, reason, details, status, reviewer_comment, timeout_minutes, created_at, resolved_at FROM approvals WHERE status = \'pending\' ORDER BY created_at ASC"
+                query: "SELECT id, agent_id, task_id, action, reason, details, status, reviewer_comment, timeout_minutes, created_at, resolved_at FROM approvals WHERE status = 'pending' ORDER BY created_at ASC"
                 mode: list
             - name: respond
               type: step.json_response
@@ -1968,7 +1973,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT id, agent_id, task_id, project_id, request_type, title, description, urgency, status, response_data, response_comment, resolved_by, timeout_minutes, metadata, created_at, resolved_at FROM human_requests WHERE id = ?"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: single
             - name: respond
               type: step.json_response
@@ -2049,8 +2054,8 @@ workflows:
                 body:
                   version: "1.0.0"
                   uptime: "running"
-                  agent_count: "{{index .steps \"count-agents\" \"row\" \"count\"}}"
-                  team_count: "{{index .steps \"count-teams\" \"row\" \"count\"}}"
+                  agent_count: "{{ step \"count-agents\" \"row\" \"count\" }}"
+                  team_count: "{{ step \"count-teams\" \"row\" \"count\" }}"
                   plugins:
                     - "ratchet.ai_provider"
                     - "ratchet.sse_hub"
@@ -2136,7 +2141,7 @@ workflows:
               config:
                 database: ratchet-db
                 query: "SELECT s.id, s.name, s.description, s.content, s.category, s.required_tools, s.created_at FROM skills s JOIN agent_skills ags ON s.id = ags.skill_id WHERE ags.agent_id = ? ORDER BY s.name ASC"
-                params: ["{{index .steps \"parse-request\" \"path_params\" \"id\"}}"]
+                params: ["{{ step \"parse-request\" \"path_params\" \"id\" }}"]
                 mode: list
             - name: respond
               type: step.json_response
@@ -2168,8 +2173,8 @@ workflows:
                 database: ratchet-db
                 query: "INSERT OR IGNORE INTO agent_skills (agent_id, skill_id) VALUES (?, ?)"
                 params:
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
-                  - "{{index .steps \"parse-request\" \"body\" \"skill_id\"}}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"skill_id\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -2194,8 +2199,8 @@ workflows:
                 database: ratchet-db
                 query: "DELETE FROM agent_skills WHERE agent_id = ? AND skill_id = ?"
                 params:
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
-                  - "{{index .steps \"parse-request\" \"path_params\" \"skill_id\"}}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  - "{{ step \"parse-request\" \"path_params\" \"skill_id\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -2255,10 +2260,10 @@ workflows:
                 query: "INSERT INTO tool_policies (id, scope, scope_id, tool_pattern, action) VALUES (?, ?, ?, ?, ?)"
                 params:
                   - "{{ .steps.prepare.id }}"
-                  - "{{ default \"global\" (index .steps \"parse-request\" \"body\" \"scope\") }}"
-                  - "{{ default \"\" (index .steps \"parse-request\" \"body\" \"scope_id\") }}"
-                  - "{{index .steps \"parse-request\" \"body\" \"tool_pattern\"}}"
-                  - "{{index .steps \"parse-request\" \"body\" \"action\"}}"
+                  - "{{ default \"global\" (step \"parse-request\" \"body\" \"scope\") }}"
+                  - "{{ default \"\" (step \"parse-request\" \"body\" \"scope_id\") }}"
+                  - "{{ step \"parse-request\" \"body\" \"tool_pattern\" }}"
+                  - "{{ step \"parse-request\" \"body\" \"action\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -2284,7 +2289,7 @@ workflows:
                 database: ratchet-db
                 query: "DELETE FROM tool_policies WHERE id = ?"
                 params:
-                  - "{{index .steps \"parse-request\" \"path_params\" \"id\"}}"
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -2430,7 +2435,7 @@ pipelines:
         config:
           database: ratchet-db
           query: "UPDATE tasks SET status = 'in_progress', started_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
-          params: ["{{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}}"]
+          params: ["{{ step \"find-pending-task\" \"row\" \"id\" }}"]
 
       - name: execute-agent
         type: step.agent_execute
@@ -2452,8 +2457,8 @@ pipelines:
           database: ratchet-db
           query: "UPDATE tasks SET status = 'completed', result = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
           params:
-            - "{{index (index .steps \"execute-agent\") \"result\"}}"
-            - "{{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}}"
+            - "{{ step \"execute-agent\" \"result\" }}"
+            - "{{ step \"find-pending-task\" \"row\" \"id\" }}"
 
       # Skip mark-failed after successful completion (jump to log-completion)
       - name: skip-to-log
@@ -2470,13 +2475,13 @@ pipelines:
           database: ratchet-db
           query: "UPDATE tasks SET status = 'failed', error = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
           params:
-            - "{{index (index .steps \"execute-agent\") \"error\"}}"
-            - "{{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}}"
+            - "{{ step \"execute-agent\" \"error\" }}"
+            - "{{ step \"find-pending-task\" \"row\" \"id\" }}"
 
       - name: log-completion
         type: step.log
         config:
-          message: "Agent tick complete: task {{index (index (index .steps \"find-pending-task\") \"row\") \"id\"}} processed"
+          message: "Agent tick complete: task {{ step \"find-pending-task\" \"row\" \"id\" }} processed"
           level: info
 
       - name: done
