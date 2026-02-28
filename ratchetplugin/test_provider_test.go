@@ -675,8 +675,9 @@ func TestE2E_HappyPath(t *testing.T) {
 	tp := NewTestProvider(source)
 	env := SetupE2EAgent(t, tp)
 
-	// Register tools with workspace
+	// Register tools with workspace and permissive policy engine.
 	env.ToolRegistry = NewToolRegistry()
+	env.ToolRegistry.SetPolicyEngine(&ToolPolicyEngine{DefaultPolicy: PolicyAllow})
 	env.ToolRegistry.Register(&tools.FileReadTool{Workspace: workspace})
 	env.ToolRegistry.Register(&tools.FileWriteTool{Workspace: workspace})
 	env.ToolRegistry.Register(&tools.FileListTool{Workspace: workspace})

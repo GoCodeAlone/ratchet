@@ -343,6 +343,9 @@ func TestToolRegistry_AllDefs(t *testing.T) {
 func TestToolRegistry_Execute(t *testing.T) {
 	tr := NewToolRegistry()
 	tr.Register(&mockTool{name: "echo", result: "hello"})
+	// Set up a permissive policy engine so the fail-closed default doesn't block.
+	pe := &ToolPolicyEngine{DefaultPolicy: PolicyAllow}
+	tr.SetPolicyEngine(pe)
 
 	result, err := tr.Execute(context.Background(), "echo", nil)
 	if err != nil {
@@ -991,6 +994,7 @@ func TestPlugin_ModuleFactories(t *testing.T) {
 		"ratchet.scheduler",
 		"ratchet.mcp_client",
 		"ratchet.mcp_server",
+		"ratchet.tool_policy_engine",
 	}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {

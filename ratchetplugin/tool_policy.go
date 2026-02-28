@@ -98,6 +98,9 @@ func (tpe *ToolPolicyEngine) RemovePolicy(ctx context.Context, id string) error 
 
 // ListPolicies returns all policies ordered by scope specificity.
 func (tpe *ToolPolicyEngine) ListPolicies(ctx context.Context) ([]ToolPolicy, error) {
+	if tpe.db == nil {
+		return nil, nil // no DB means no stored policies; DefaultPolicy will apply
+	}
 	rows, err := tpe.db.QueryContext(ctx,
 		`SELECT id, scope, scope_id, tool_pattern, action, created_at FROM tool_policies ORDER BY created_at ASC`,
 	)
@@ -203,6 +206,24 @@ func policyMatchesTool(pattern, toolName string) bool {
 	}
 
 	return false
+}
+
+// toolPolicyConfigModule is a lightweight module that accepts the tool_policy_engine
+// YAML config. The actual engine is wired by toolPolicyEngineHook.
+type toolPolicyConfigModule struct{ name string }
+
+func (m *toolPolicyConfigModule) Name() string                                      { return m.name }
+func (m *toolPolicyConfigModule) Init(_ modular.Application) error                  { return nil }
+func (m *toolPolicyConfigModule) ProvidesServices() []modular.ServiceProvider       { return nil }
+func (m *toolPolicyConfigModule) RequiresServices() []modular.ServiceDependency     { return nil }
+
+// newToolPolicyModuleFactory returns a module factory for ratchet.tool_policy_engine.
+// This registers the module type so config validation accepts it. The actual engine
+// initialization happens in the toolPolicyEngineHook wiring hook.
+func newToolPolicyModuleFactory() plugin.ModuleFactory {
+	return func(name string, _ map[string]any) modular.Module {
+		return &toolPolicyConfigModule{name: name}
+	}
 }
 
 // toolPolicyEngineHook creates a ToolPolicyEngine and registers it in the service registry.

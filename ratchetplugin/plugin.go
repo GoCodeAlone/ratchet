@@ -54,11 +54,12 @@ func (p *RatchetPlugin) Capabilities() []capability.Contract {
 // ModuleFactories returns the module factories registered by this plugin.
 func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 	return map[string]plugin.ModuleFactory{
-		"ratchet.ai_provider": newAIProviderFactory(),
-		"ratchet.sse_hub":     newSSEHubFactory(),
-		"ratchet.scheduler":   newSchedulerFactory(),
-		"ratchet.mcp_client":  newMCPClientFactory(),
-		"ratchet.mcp_server":  newMCPServerFactory(),
+		"ratchet.ai_provider":        newAIProviderFactory(),
+		"ratchet.sse_hub":            newSSEHubFactory(),
+		"ratchet.scheduler":          newSchedulerFactory(),
+		"ratchet.mcp_client":         newMCPClientFactory(),
+		"ratchet.mcp_server":         newMCPServerFactory(),
+		"ratchet.tool_policy_engine": newToolPolicyModuleFactory(),
 	}
 }
 
