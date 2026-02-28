@@ -1,4 +1,5 @@
 bin/
+ratchetd
 data/
 *.db
 *.db-shm
