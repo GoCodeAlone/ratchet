@@ -140,7 +140,7 @@ function ReposTab({ projectId }: { projectId: string }) {
             {error}
           </div>
         )}
-        <form onSubmit={handleAdd} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+        <form onSubmit={handleAdd} style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }} data-1p-ignore>
           <div style={{ flex: 2 }}>
             <label style={{ display: 'block', color: colors.subtext1, fontSize: '12px', marginBottom: '4px' }}>Repository URL</label>
             <input

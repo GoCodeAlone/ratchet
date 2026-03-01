@@ -242,6 +242,7 @@ export default function WebhookList() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. GitHub Issues"
+                data-1p-ignore
                 style={baseStyles.input}
                 autoFocus
               />
@@ -277,6 +278,7 @@ export default function WebhookList() {
                 value={form.secret_name}
                 onChange={(e) => setForm({ ...form, secret_name: e.target.value })}
                 placeholder="e.g. github-webhook-secret"
+                data-1p-ignore
                 style={baseStyles.input}
               />
             </div>
@@ -292,6 +294,7 @@ export default function WebhookList() {
                 value={form.filter}
                 onChange={(e) => setForm({ ...form, filter: e.target.value })}
                 placeholder="e.g. push, issues, pull_request.opened"
+                data-1p-ignore
                 style={baseStyles.input}
               />
             </div>

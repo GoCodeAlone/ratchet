@@ -399,6 +399,7 @@ export default function ProviderWizard({ onClose, editAlias, editType, editModel
                 onChange={(e) => setAlias(e.target.value)}
                 placeholder="e.g. claude-main"
                 autoFocus
+                data-1p-ignore
                 style={baseStyles.input}
               />
               <div style={{ fontSize: '11px', color: colors.overlay0, marginTop: '4px' }}>
@@ -413,6 +414,7 @@ export default function ProviderWizard({ onClose, editAlias, editType, editModel
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
                   placeholder="https://api.example.com/v1"
+                  data-1p-ignore
                   style={baseStyles.input}
                 />
                 <div style={{ fontSize: '11px', color: colors.overlay0, marginTop: '4px' }}>
@@ -503,6 +505,7 @@ export default function ProviderWizard({ onClose, editAlias, editType, editModel
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder="sk-..."
                     autoFocus
+                    data-1p-ignore
                     style={{ ...baseStyles.input, paddingRight: '60px' }}
                   />
                   <button
@@ -588,6 +591,7 @@ export default function ProviderWizard({ onClose, editAlias, editType, editModel
                   value={customModel}
                   onChange={(e) => setCustomModel(e.target.value)}
                   placeholder="Model name"
+                  data-1p-ignore
                   style={{ ...baseStyles.input, marginTop: (models.length > 0 || dynamicModels.length > 0) ? '8px' : 0 }}
                 />
               )}

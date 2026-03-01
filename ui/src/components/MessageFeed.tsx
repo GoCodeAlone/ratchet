@@ -137,6 +137,7 @@ export default function MessageFeed() {
             type="checkbox"
             checked={autoScroll}
             onChange={(e) => setAutoScroll(e.target.checked)}
+            data-1p-ignore
           />
           Auto-scroll
         </label>

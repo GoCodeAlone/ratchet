@@ -125,6 +125,7 @@ function ArgsTagInput({ args, onChange }: ArgsTagInputProps) {
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={args.length === 0 ? 'Type an argument and press Enter' : ''}
+          data-1p-ignore
           style={{
             background: 'none',
             border: 'none',
@@ -381,6 +382,7 @@ export default function McpServerList() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. filesystem"
+                data-1p-ignore
                 style={baseStyles.input}
                 autoFocus
               />
@@ -406,6 +408,7 @@ export default function McpServerList() {
                   value={form.command}
                   onChange={(e) => setForm({ ...form, command: e.target.value })}
                   placeholder="e.g. npx"
+                  data-1p-ignore
                   style={baseStyles.input}
                 />
               </div>
@@ -425,6 +428,7 @@ export default function McpServerList() {
                 value={form.url}
                 onChange={(e) => setForm({ ...form, url: e.target.value })}
                 placeholder="e.g. http://localhost:3001/sse"
+                data-1p-ignore
                 style={baseStyles.input}
               />
             </div>

@@ -35,7 +35,7 @@ function NewProjectModal({ onClose, onSubmit }: { onClose: () => void; onSubmit:
             {error}
           </div>
         )}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} data-1p-ignore>
           <div style={{ marginBottom: '14px' }}>
             <label style={{ display: 'block', color: colors.subtext1, fontSize: '13px', marginBottom: '6px' }}>Name *</label>
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" required autoFocus style={baseStyles.input} />

@@ -182,6 +182,7 @@ export default function SkillList() {
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="Filter skills..."
+            data-1p-ignore
             style={{ ...baseStyles.input, width: '200px', padding: '6px 12px', fontSize: '13px' }}
           />
           <button

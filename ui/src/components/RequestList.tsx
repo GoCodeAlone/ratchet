@@ -244,6 +244,7 @@ function ResolutionForm({
               onChange={(e) => update({ responseValue: e.target.value })}
               placeholder="Paste token or secret..."
               autoComplete="off"
+              data-1p-ignore
               style={baseStyles.input}
             />
             {secretName && (
@@ -279,6 +280,7 @@ function ResolutionForm({
               value={form.responseValue}
               onChange={(e) => update({ responseValue: e.target.value })}
               placeholder="e.g. /usr/local/bin/mytool or 'installed via brew'"
+              data-1p-ignore
               style={baseStyles.input}
             />
           </>
@@ -292,6 +294,7 @@ function ResolutionForm({
               value={form.responseValue}
               onChange={(e) => update({ responseValue: e.target.value })}
               placeholder="e.g. granted, role assigned, credentials configured"
+              data-1p-ignore
               style={baseStyles.input}
             />
           </>
@@ -319,6 +322,7 @@ function ResolutionForm({
           value={form.comment}
           onChange={(e) => update({ comment: e.target.value })}
           placeholder="Add a note for the agent..."
+          data-1p-ignore
           style={baseStyles.input}
         />
       </div>

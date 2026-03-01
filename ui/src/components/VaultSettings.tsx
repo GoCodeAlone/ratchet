@@ -265,6 +265,7 @@ export default function VaultSettings() {
           placeholder="Vault Address (e.g. https://vault.example.com:8200)"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
+          data-1p-ignore
           style={inputStyle}
         />
         <input
@@ -272,6 +273,7 @@ export default function VaultSettings() {
           placeholder="Vault Token"
           value={token}
           onChange={(e) => setToken(e.target.value)}
+          data-1p-ignore
           style={inputStyle}
         />
         <input
@@ -279,6 +281,7 @@ export default function VaultSettings() {
           placeholder="Mount Path (default: secret)"
           value={mountPath}
           onChange={(e) => setMountPath(e.target.value)}
+          data-1p-ignore
           style={inputStyle}
         />
         <input
@@ -286,6 +289,7 @@ export default function VaultSettings() {
           placeholder="Namespace (optional)"
           value={namespace}
           onChange={(e) => setNamespace(e.target.value)}
+          data-1p-ignore
           style={inputStyle}
         />
 
@@ -304,6 +308,7 @@ export default function VaultSettings() {
             type="checkbox"
             checked={migrateSecrets}
             onChange={(e) => setMigrateSecrets(e.target.checked)}
+            data-1p-ignore
             style={{ accentColor: colors.blue }}
           />
           Migrate existing secrets when switching backends

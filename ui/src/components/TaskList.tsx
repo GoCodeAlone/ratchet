@@ -506,7 +506,7 @@ function NewTaskModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (i
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} data-1p-ignore>
           <div style={{ marginBottom: '14px' }}>
             <label style={labelStyle}>Title *</label>
             <input
@@ -648,6 +648,7 @@ export default function TaskList() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search tasks..."
+          data-1p-ignore
           style={{ ...baseStyles.input, width: '200px' }}
         />
 
