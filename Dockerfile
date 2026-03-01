@@ -71,6 +71,7 @@ WORKDIR /app
 COPY --from=go-builder /build/ratchetd .
 COPY --from=ui-builder /build/ui/dist/ ./ui/dist/
 COPY ratchet.yaml .
+COPY config/ config/
 
 # Create writable data directory for SQLite (data/ratchet.db)
 RUN mkdir -p /app/data && chown nonroot:nonroot /app/data

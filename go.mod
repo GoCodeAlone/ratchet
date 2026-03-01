@@ -25,8 +25,11 @@ require (
 	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/CrisisTextLine/modular/modules/auth v0.4.0 // indirect
+	github.com/CrisisTextLine/modular/modules/cache v0.4.0 // indirect
 	github.com/CrisisTextLine/modular/modules/eventbus/v2 v2.0.0 // indirect
+	github.com/CrisisTextLine/modular/modules/jsonschema v1.4.0 // indirect
 	github.com/CrisisTextLine/modular/modules/reverseproxy/v2 v2.2.0 // indirect
+	github.com/CrisisTextLine/modular/modules/scheduler v0.4.0 // indirect
 	github.com/DataDog/datadog-go/v5 v5.4.0 // indirect
 	github.com/GoCodeAlone/yaegi v0.17.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
@@ -142,7 +145,9 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/redis/go-redis/v9 v9.18.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/ryanuber/go-glob v1.0.0 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.6.0 // indirect
 	github.com/ysmood/fetchup v0.2.3 // indirect
 	github.com/ysmood/goob v0.4.0 // indirect

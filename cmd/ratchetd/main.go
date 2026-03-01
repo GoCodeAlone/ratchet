@@ -18,6 +18,7 @@ import (
 	"github.com/GoCodeAlone/workflow"
 	"github.com/GoCodeAlone/workflow/config"
 	_ "github.com/GoCodeAlone/workflow/setup"
+	"github.com/GoCodeAlone/workflow/plugins/all"
 	_ "modernc.org/sqlite"
 )
 
@@ -43,6 +44,7 @@ func main() {
 	engine, err := workflow.NewEngineBuilder().
 		WithAllDefaults().
 		WithLogger(logger).
+		WithPlugins(all.DefaultPlugins()...).
 		WithPlugin(ratchetplugin.New()).
 		BuildFromConfig(cfg)
 	if err != nil {
