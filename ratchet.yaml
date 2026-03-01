@@ -21,6 +21,16 @@
 #   config/pipelines.yaml        - Background processing pipelines
 #   config/triggers.yaml         - Scheduled triggers
 
+sidecars:
+  - name: ts-sidecar
+    type: sidecar.tailscale
+    config:
+      hostname: ratchet
+      auth_key_secret: tsauth
+      serve:
+        port: 443
+        backend_port: 9090
+
 imports:
   - config/modules.yaml
   - config/routes-core.yaml
