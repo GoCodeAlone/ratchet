@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate as useRouterNavigate, Routes, Route } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme';
@@ -56,19 +56,53 @@ const navItems: { id: NavItem; label: string }[] = [
 
 export default function Layout() {
   const [navFilter, setNavFilter] = useState<NavFilter | undefined>(undefined);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const { user, logout } = useAuthStore();
   const location = useLocation();
   const routerNavigate = useRouterNavigate();
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   const active = pathToNavItem(location.pathname);
 
   function navigate(page: NavItem, filter?: NavFilter) {
     setNavFilter(filter);
     routerNavigate(navPaths[page]);
+    if (isMobile) setSidebarOpen(false);
   }
+
+  const mobileSidebarStyle = isMobile
+    ? {
+        position: 'fixed' as const,
+        top: 0,
+        left: 0,
+        height: '100%',
+        zIndex: 100,
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.25s ease',
+      }
+    : {};
 
   return (
     <div style={{ display: 'flex', height: '100vh', backgroundColor: colors.base }}>
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 99,
+          }}
+        />
+      )}
+
       {/* Sidebar */}
       <div
         style={{
@@ -78,6 +112,7 @@ export default function Layout() {
           borderRight: `1px solid ${colors.surface0}`,
           display: 'flex',
           flexDirection: 'column',
+          ...mobileSidebarStyle,
         }}
       >
         {/* Logo */}
@@ -87,20 +122,40 @@ export default function Layout() {
             borderBottom: `1px solid ${colors.surface0}`,
           }}
         >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: '20px',
-              fontWeight: '700',
-              color: colors.blue,
-              letterSpacing: '-0.5px',
-            }}
-          >
-            Ratchet
-          </h2>
-          <p style={{ margin: '2px 0 0', fontSize: '11px', color: colors.overlay0 }}>
-            AI Agent Platform
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: '700',
+                  color: colors.blue,
+                  letterSpacing: '-0.5px',
+                }}
+              >
+                Ratchet
+              </h2>
+              <p style={{ margin: '2px 0 0', fontSize: '11px', color: colors.overlay0 }}>
+                AI Agent Platform
+              </p>
+            </div>
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: colors.overlay0,
+                  cursor: 'pointer',
+                  fontSize: '20px',
+                  lineHeight: 1,
+                  padding: '0 4px',
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Nav */}
@@ -182,6 +237,24 @@ export default function Layout() {
             flexShrink: 0,
           }}
         >
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: colors.text,
+                cursor: 'pointer',
+                fontSize: '20px',
+                lineHeight: 1,
+                padding: '4px',
+                marginRight: '12px',
+              }}
+              aria-label="Open menu"
+            >
+              ☰
+            </button>
+          )}
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.text }}>
             {active ? navItems.find((n) => n.id === active)?.label : 'Page Not Found'}
           </h3>

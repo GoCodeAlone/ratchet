@@ -127,7 +127,7 @@ function AgentModal({ onClose, onSubmit, agent }: {
               <option value="">(Default)</option>
               {providers.map((p) => (
                 <option key={p.alias} value={p.alias}>
-                  {p.alias} ({p.type} / {p.model})
+                  {p.model ? `${p.alias} (${p.type} / ${p.model})` : `${p.alias} (${p.type})`}
                 </option>
               ))}
             </select>
@@ -312,6 +312,14 @@ function AgentSkillsPanel({ agentId }: { agentId: string }) {
 function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () => void }) {
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
   const [transcriptsLoading, setTranscriptsLoading] = useState(false);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     setTranscriptsLoading(true);
