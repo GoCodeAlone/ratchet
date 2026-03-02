@@ -7,8 +7,12 @@ import { AgentStatus } from '../types';
 
 type NavItem = 'dashboard' | 'agents' | 'tasks' | 'messages' | 'projects' | 'requests' | 'skills' | 'settings';
 
+export interface NavFilter {
+  status?: string;
+}
+
 interface DashboardProps {
-  onNavigate: (page: NavItem) => void;
+  onNavigate: (page: NavItem, filter?: NavFilter) => void;
 }
 
 function StatCard({
@@ -99,13 +103,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
         <StatCard label="Total Agents" value={agents.length} color={colors.blue} onClick={() => onNavigate('agents')} />
         <StatCard label="Active Agents" value={activeAgents} color={colors.green} onClick={() => onNavigate('agents')} />
-        <StatCard label="Pending Tasks" value={pendingTasks} color={colors.yellow} onClick={() => onNavigate('tasks')} />
-        <StatCard label="Completed Tasks" value={completedTasks} color={colors.teal} onClick={() => onNavigate('tasks')} />
+        <StatCard label="Pending Tasks" value={pendingTasks} color={colors.yellow} onClick={() => onNavigate('tasks', { status: 'pending' })} />
+        <StatCard label="Completed Tasks" value={completedTasks} color={colors.teal} onClick={() => onNavigate('tasks', { status: 'completed' })} />
         {pendingRequests > 0 && (
           <StatCard label="Pending Requests" value={pendingRequests} color={colors.peach} onClick={() => onNavigate('requests')} />
         )}
         {failedTasks > 0 && (
-          <StatCard label="Failed Tasks" value={failedTasks} color={colors.red} onClick={() => onNavigate('tasks')} />
+          <StatCard label="Failed Tasks" value={failedTasks} color={colors.red} onClick={() => onNavigate('tasks', { status: 'failed' })} />
         )}
       </div>
 

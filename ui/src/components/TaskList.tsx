@@ -4,6 +4,7 @@ import { useAgentStore } from '../store/agentStore';
 import { colors, statusColors, baseStyles } from '../theme';
 import { Task, Project, TranscriptEntry } from '../types';
 import { fetchProjects, fetchTaskTranscripts } from '../utils/api';
+import { NavFilter } from './Dashboard';
 
 type TaskStatus = Task['status'];
 
@@ -602,10 +603,10 @@ function NewTaskModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (i
   );
 }
 
-export default function TaskList() {
+export default function TaskList({ initialFilter }: { initialFilter?: NavFilter }) {
   const { tasks, loading, fetchTasks, createTask } = useTaskStore();
   const { agents, fetchAgents } = useAgentStore();
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>(initialFilter?.status ?? '');
   const [agentFilter, setAgentFilter] = useState<string>('');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -615,6 +616,11 @@ export default function TaskList() {
     fetchAgents();
     fetchTasks();
   }, [fetchAgents, fetchTasks]);
+
+  // Apply initialFilter when it changes (e.g., navigating from dashboard stat cards)
+  useEffect(() => {
+    setStatusFilter(initialFilter?.status ?? '');
+  }, [initialFilter]);
 
   function applyFilters() {
     fetchTasks({

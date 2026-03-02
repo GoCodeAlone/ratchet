@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme';
-import Dashboard from './Dashboard';
+import Dashboard, { NavFilter } from './Dashboard';
 import AgentList from './AgentList';
 import TaskList from './TaskList';
 import MessageFeed from './MessageFeed';
@@ -37,18 +37,36 @@ const navItems: { id: NavItem; label: string }[] = [
 
 export default function Layout() {
   const [active, setActive] = useState<NavItem>('dashboard');
+  const [navFilter, setNavFilter] = useState<NavFilter | undefined>(undefined);
   const { user, logout } = useAuthStore();
+
+  function navigate(page: NavItem, filter?: NavFilter) {
+    setActive(page);
+    setNavFilter(filter);
+  }
 
   function renderContent() {
     switch (active) {
-      case 'dashboard': return <Dashboard onNavigate={setActive} />;
+      case 'dashboard': return <Dashboard onNavigate={navigate} />;
       case 'agents': return <AgentList />;
-      case 'tasks': return <TaskList />;
+      case 'tasks': return <TaskList initialFilter={navFilter} />;
       case 'messages': return <MessageFeed />;
       case 'projects': return <ProjectList />;
       case 'requests': return <RequestList />;
       case 'skills': return <SkillList />;
       case 'settings': return <Settings />;
+      default: return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', gap: '16px' }}>
+          <div style={{ fontSize: '48px', color: colors.overlay0 }}>404</div>
+          <div style={{ fontSize: '18px', color: colors.subtext0 }}>Page not found</div>
+          <button
+            onClick={() => navigate('dashboard')}
+            style={{ color: colors.blue, background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+          >
+            &larr; Return to Dashboard
+          </button>
+        </div>
+      );
     }
   }
 
@@ -93,7 +111,7 @@ export default function Layout() {
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActive(item.id)}
+              onClick={() => navigate(item.id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -133,7 +151,10 @@ export default function Layout() {
             {String(user && 'username' in user ? user.username : user?.email ?? 'User')}
           </div>
           <button
-            onClick={logout}
+            onClick={() => {
+              if (!window.confirm('Sign out of Ratchet?')) return;
+              logout();
+            }}
             style={{
               width: '100%',
               padding: '7px',

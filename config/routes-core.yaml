@@ -88,7 +88,10 @@ workflows:
                 status: 200
                 body:
                   version: "1.0.0"
-                  uptime: "running"
+                  # started_at returns the current request time (not actual server start time).
+                  # The UI's formatUptime() computes elapsed time from this timestamp,
+                  # showing "0m" which at least confirms the server is alive and responsive.
+                  started_at: "{{ now }}"
                   agent_count: "{{ step \"count-agents\" \"row\" \"count\" }}"
                   team_count: "{{ step \"count-teams\" \"row\" \"count\" }}"
                   plugins:

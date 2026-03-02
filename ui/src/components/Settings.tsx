@@ -83,9 +83,40 @@ export default function Settings() {
   }
 
   return (
-    <div style={{ maxWidth: '640px' }}>
+    <div style={{ maxWidth: '640px', paddingBottom: '32px' }}>
+      {/* Section anchor nav */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '8px',
+          flexWrap: 'wrap',
+          marginBottom: '20px',
+          padding: '10px 14px',
+          backgroundColor: colors.mantle,
+          borderRadius: '8px',
+          fontSize: '13px',
+        }}
+      >
+        {[
+          ['server-info', 'Server Info'],
+          ['plugins', 'Plugins'],
+          ['vault', 'Vault'],
+          ['ai-providers', 'AI Providers'],
+          ['connection', 'Connection'],
+          ['mcp', 'MCP Servers'],
+          ['webhooks', 'Webhooks'],
+        ].map(([id, label]) => (
+          <a
+            key={id}
+            href={`#settings-${id}`}
+            style={{ color: colors.blue, textDecoration: 'none', padding: '2px 8px', borderRadius: '4px', backgroundColor: `${colors.blue}11` }}
+          >
+            {label}
+          </a>
+        ))}
+      </div>
       {/* Server Info */}
-      <div style={{ ...baseStyles.card, marginBottom: '16px' }}>
+      <div id="settings-server-info" style={{ ...baseStyles.card, marginBottom: '16px' }}>
         <SectionTitle>Server Info</SectionTitle>
         {loading ? (
           <div style={{ color: colors.subtext0, fontSize: '14px' }}>Loading...</div>
@@ -106,7 +137,7 @@ export default function Settings() {
       </div>
 
       {/* Plugins */}
-      <div style={{ ...baseStyles.card, marginBottom: '16px' }}>
+      <div id="settings-plugins" style={{ ...baseStyles.card, marginBottom: '16px' }}>
         <SectionTitle>Plugins</SectionTitle>
         {info?.plugins && info.plugins.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -134,13 +165,15 @@ export default function Settings() {
       </div>
 
       {/* Vault Settings */}
+      <div id="settings-vault" />
       <VaultSettings />
 
       {/* AI Providers */}
+      <div id="settings-ai-providers" />
       <ProviderList />
 
       {/* Connection */}
-      <div style={{ ...baseStyles.card, marginBottom: '16px' }}>
+      <div id="settings-connection" style={{ ...baseStyles.card, marginBottom: '16px' }}>
         <SectionTitle>Connection</SectionTitle>
         <InfoRow label="API Base" value="localhost:9090" />
         <InfoRow label="UI Host" value={window.location.host} />
@@ -162,9 +195,11 @@ export default function Settings() {
       </div>
 
       {/* MCP Servers */}
+      <div id="settings-mcp" />
       <McpServerList />
 
       {/* Webhooks */}
+      <div id="settings-webhooks" />
       <WebhookList />
     </div>
   );
