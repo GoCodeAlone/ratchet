@@ -12,15 +12,27 @@ import RequestList from './RequestList';
 
 type NavItem = 'dashboard' | 'agents' | 'tasks' | 'messages' | 'projects' | 'requests' | 'skills' | 'settings';
 
-const navItems: { id: NavItem; label: string; icon: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: '[D]' },
-  { id: 'agents', label: 'Agents', icon: '[A]' },
-  { id: 'tasks', label: 'Tasks', icon: '[T]' },
-  { id: 'messages', label: 'Messages', icon: '[M]' },
-  { id: 'projects', label: 'Projects', icon: '[P]' },
-  { id: 'requests', label: 'Requests', icon: '[R]' },
-  { id: 'skills', label: 'Skills', icon: '[K]' },
-  { id: 'settings', label: 'Settings', icon: '[S]' },
+// SVG path data for each nav icon (Lucide-style)
+const iconPaths: Record<NavItem, string[]> = {
+  dashboard: ['M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z', 'M9 22V12h6v10'],
+  agents: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
+  tasks: ['M9 11l3 3L22 4', 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'],
+  messages: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+  projects: ['M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z'],
+  requests: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M12 18v-6', 'M9 15h6'],
+  skills: ['M12 2L2 7l10 5 10-5-10-5z', 'M2 17l10 5 10-5', 'M2 12l10 5 10-5'],
+  settings: ['M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z'],
+};
+
+const navItems: { id: NavItem; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'agents', label: 'Agents' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'messages', label: 'Messages' },
+  { id: 'projects', label: 'Projects' },
+  { id: 'requests', label: 'Requests' },
+  { id: 'skills', label: 'Skills' },
+  { id: 'settings', label: 'Settings' },
 ];
 
 export default function Layout() {
@@ -100,9 +112,11 @@ export default function Layout() {
                 transition: 'all 0.15s',
               }}
             >
-              <span style={{ fontSize: '12px', fontFamily: 'monospace', color: active === item.id ? colors.blue : colors.overlay1 }}>
-                {item.icon}
-              </span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                stroke={active === item.id ? colors.blue : colors.overlay1}
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                {iconPaths[item.id].map((d, i) => <path key={i} d={d} />)}
+              </svg>
               {item.label}
             </button>
           ))}
