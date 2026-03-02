@@ -481,6 +481,9 @@ function NewTaskModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (i
         zIndex: 1000,
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+      tabIndex={-1}
+      ref={(el) => el?.focus()}
     >
       <div
         style={{

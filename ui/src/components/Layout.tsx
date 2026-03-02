@@ -24,11 +24,11 @@ const navPaths: Record<NavItem, string> = {
   settings: '/settings',
 };
 
-function pathToNavItem(pathname: string): NavItem {
+function pathToNavItem(pathname: string): NavItem | null {
   if (pathname === '/') return 'dashboard';
   const found = (Object.entries(navPaths) as [NavItem, string][])
     .find(([, path]) => path !== '/' && pathname.startsWith(path));
-  return found ? found[0] : 'dashboard';
+  return found ? found[0] : null;
 }
 
 // SVG path data for each nav icon (Lucide-style)
@@ -183,7 +183,7 @@ export default function Layout() {
           }}
         >
           <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', color: colors.text }}>
-            {navItems.find((n) => n.id === active)?.label}
+            {active ? navItems.find((n) => n.id === active)?.label : 'Page Not Found'}
           </h3>
         </div>
 

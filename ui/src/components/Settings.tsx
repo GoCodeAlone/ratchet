@@ -19,7 +19,7 @@ interface ServerInfo {
 function formatUptime(info: ServerInfo): string {
   const startRaw = info.started_at ?? info.start_time;
   if (startRaw) {
-    const startMs = new Date(startRaw).getTime();
+    const startMs = new Date(startRaw.endsWith('Z') ? startRaw : startRaw + 'Z').getTime();
     if (!isNaN(startMs)) {
       const totalSeconds = Math.floor((Date.now() - startMs) / 1000);
       const days = Math.floor(totalSeconds / 86400);

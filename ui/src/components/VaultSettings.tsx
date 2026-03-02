@@ -260,6 +260,7 @@ export default function VaultSettings() {
           Remote Vault Configuration
         </div>
 
+        <form onSubmit={(e) => { e.preventDefault(); handleConfigure(); }} data-1p-ignore>
         <input
           type="text"
           placeholder="Vault Address (e.g. https://vault.example.com:8200)"
@@ -316,6 +317,7 @@ export default function VaultSettings() {
 
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
+            type="button"
             onClick={handleTest}
             disabled={testing || !address || !token}
             style={{
@@ -326,7 +328,7 @@ export default function VaultSettings() {
             {testing ? 'Testing...' : 'Test Connection'}
           </button>
           <button
-            onClick={handleConfigure}
+            type="submit"
             disabled={configuring || !address || !token}
             style={{
               ...baseStyles.button.primary,
@@ -336,6 +338,7 @@ export default function VaultSettings() {
             {configuring ? 'Saving...' : 'Save & Connect'}
           </button>
         </div>
+        </form>
 
         {/* Test result */}
         {testResult && (
