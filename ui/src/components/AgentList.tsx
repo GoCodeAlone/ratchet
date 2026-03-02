@@ -555,7 +555,7 @@ export default function AgentList() {
           No agents registered. Start the Ratchet server with an agent config.
         </div>
       ) : (
-        <div style={{ ...baseStyles.card, padding: 0, overflow: 'hidden' }}>
+        <div style={{ ...baseStyles.card, padding: 0, overflowX: 'auto' }}>
           <table style={baseStyles.table}>
             <thead>
               <tr style={{ backgroundColor: colors.mantle }}>

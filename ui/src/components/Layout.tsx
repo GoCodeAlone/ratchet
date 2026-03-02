@@ -123,7 +123,7 @@ export default function Layout() {
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
+            <div style={{ overflow: 'hidden', minWidth: 0 }}>
               <h2
                 style={{
                   margin: 0,
@@ -131,6 +131,9 @@ export default function Layout() {
                   fontWeight: '700',
                   color: colors.blue,
                   letterSpacing: '-0.5px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 Ratchet

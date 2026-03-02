@@ -739,7 +739,7 @@ export default function TaskList({ initialFilter }: { initialFilter?: NavFilter 
           No tasks found.
         </div>
       ) : (
-        <div style={{ ...baseStyles.card, padding: 0, overflow: 'hidden' }}>
+        <div style={{ ...baseStyles.card, padding: 0, overflowX: 'auto' }}>
           <table style={baseStyles.table}>
             <thead>
               <tr style={{ backgroundColor: colors.mantle }}>
