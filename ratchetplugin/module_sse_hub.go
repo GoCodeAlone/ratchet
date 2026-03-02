@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/workflow/plugin"
@@ -71,6 +72,11 @@ func (h *SSEHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Disable write deadline for this long-lived SSE connection so the
+	// server's global writeTimeout does not abort the stream.
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -92,16 +98,25 @@ func (h *SSEHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	// Send periodic heartbeat comments to keep the connection alive through
+	// proxies and prevent idle-connection timeouts.
+	heartbeat := time.NewTicker(25 * time.Second)
+	defer heartbeat.Stop()
+
 	// Stream events
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-heartbeat.C:
+			_, _ = fmt.Fprintf(w, ": ping\n\n")
+			flusher.Flush()
 		case msg, open := <-ch:
 			if !open {
 				return
 			}
-			_, _ = fmt.Fprintf(w, "%s\n", msg)
+			// Each SSE event must be terminated by a blank line (\n\n).
+			_, _ = fmt.Fprintf(w, "%s\n\n", msg)
 			flusher.Flush()
 		}
 	}

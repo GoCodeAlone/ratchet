@@ -70,6 +70,12 @@ workflows:
         middlewares: *auth_mw
         pipeline:
           steps:
+            - name: get-started-at
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT value FROM server_info WHERE key = 'started_at'"
+                mode: single
             - name: count-agents
               type: step.db_query
               config:
@@ -88,10 +94,7 @@ workflows:
                 status: 200
                 body:
                   version: "1.0.0"
-                  # started_at returns the current request time (not actual server start time).
-                  # The UI's formatUptime() computes elapsed time from this timestamp,
-                  # showing "0m" which at least confirms the server is alive and responsive.
-                  started_at: "{{ now }}"
+                  started_at: "{{ step \"get-started-at\" \"row\" \"value\" }}"
                   agent_count: "{{ step \"count-agents\" \"row\" \"count\" }}"
                   team_count: "{{ step \"count-teams\" \"row\" \"count\" }}"
                   plugins:

@@ -223,6 +223,12 @@ CREATE TABLE IF NOT EXISTS schema_version (
     applied_at DATETIME NOT NULL DEFAULT (datetime('now'))
 );`
 
+const createServerInfoTable = `
+CREATE TABLE IF NOT EXISTS server_info (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);`
+
 // migrations is the ordered list of incremental schema changes applied after
 // the initial table creation. Each entry is identified by a monotonically
 // increasing version number. A migration is skipped if its version is already
@@ -289,7 +295,7 @@ func dbInitHook() plugin.WiringHook {
 				createLLMProvidersTable, createToolPoliciesTable, createApprovalsTable,
 				createHumanRequestsTable,
 				createSkillsTable, createAgentSkillsTable, createWebhooksTable,
-				createSchemaVersionTable,
+				createSchemaVersionTable, createServerInfoTable,
 			} {
 				if _, err := db.Exec(ddl); err != nil {
 					return fmt.Errorf("ratchet.db_init: create table: %w", err)
@@ -311,6 +317,10 @@ func dbInitHook() plugin.WiringHook {
 				_, _ = db.Exec(m.sql)
 				_, _ = db.Exec("INSERT OR IGNORE INTO schema_version (version) VALUES (?)", m.version)
 			}
+
+			// Record server start time. INSERT OR REPLACE so every restart
+			// updates the timestamp, enabling accurate uptime calculation.
+			_, _ = db.Exec("INSERT OR REPLACE INTO server_info (key, value) VALUES ('started_at', datetime('now'))")
 
 			// Initialize memory tables (FTS5 + triggers managed by MemoryStore)
 			ms := NewMemoryStore(db)
