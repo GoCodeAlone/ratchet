@@ -360,7 +360,7 @@ function AgentDetailPanel({ agent, onClose }: { agent: AgentInfo; onClose: () =>
         </div>
         <div>
           <div style={{ color: colors.subtext0, marginBottom: '3px' }}>Model</div>
-          <div style={{ color: colors.text, fontFamily: 'monospace' }}>{agent.model}</div>
+          <div style={{ color: colors.text, fontFamily: 'monospace' }}>{agent.model || '—'}</div>
         </div>
         <div>
           <div style={{ color: colors.subtext0, marginBottom: '3px' }}>Team</div>

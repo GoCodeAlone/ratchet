@@ -647,6 +647,7 @@ export default function TaskList() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }}
           placeholder="Search tasks..."
           data-1p-ignore
           style={{ ...baseStyles.input, width: '200px' }}
@@ -769,7 +770,7 @@ export default function TaskList() {
                     )}
                   </td>
                   <td style={{ ...baseStyles.td, color: colors.subtext0 }}>
-                    {task.assigned_to || '—'}
+                    {agents.find((a) => a.id === task.assigned_to)?.name || task.assigned_to || '—'}
                   </td>
                   <td style={{ ...baseStyles.td, color: colors.subtext0, fontSize: '12px', fontFamily: 'monospace' }}>
                     {task.project_id || '—'}

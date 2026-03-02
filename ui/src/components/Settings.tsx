@@ -143,7 +143,7 @@ export default function Settings() {
       <div style={{ ...baseStyles.card, marginBottom: '16px' }}>
         <SectionTitle>Connection</SectionTitle>
         <InfoRow label="API Base" value="localhost:9090" />
-        <InfoRow label="UI Port" value="localhost:5173 (dev)" />
+        <InfoRow label="UI Host" value={window.location.host} />
         <div
           style={{
             marginTop: '12px',

@@ -247,7 +247,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 </div>
                 {task.assigned_to && (
                   <div style={{ fontSize: '12px', color: colors.overlay1 }}>
-                    &rarr; {task.assigned_to}
+                    &rarr; {agents.find((a) => a.id === task.assigned_to)?.name || task.assigned_to}
                   </div>
                 )}
               </div>
