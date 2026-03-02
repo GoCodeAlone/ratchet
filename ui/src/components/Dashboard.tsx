@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAgentStore } from '../store/agentStore';
 import { useTaskStore } from '../store/taskStore';
 import { useRequestStore } from '../store/requestStore';
@@ -15,17 +15,27 @@ function StatCard({
   label,
   value,
   color,
+  onClick,
 }: {
   label: string;
   value: number | string;
   color?: string;
+  onClick?: () => void;
 }) {
+  const [hovered, setHovered] = useState(false);
   return (
     <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
         ...baseStyles.card,
         flex: 1,
         minWidth: '160px',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'background-color 0.15s, border-color 0.15s',
+        backgroundColor: hovered && onClick ? '#363a4f' : undefined,
+        borderColor: hovered && onClick ? (color ?? colors.blue) : undefined,
       }}
     >
       <div
@@ -87,15 +97,15 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     <div style={{ maxWidth: '1200px' }}>
       {/* Stat cards */}
       <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <StatCard label="Total Agents" value={agents.length} color={colors.blue} />
-        <StatCard label="Active Agents" value={activeAgents} color={colors.green} />
-        <StatCard label="Pending Tasks" value={pendingTasks} color={colors.yellow} />
-        <StatCard label="Completed Tasks" value={completedTasks} color={colors.teal} />
+        <StatCard label="Total Agents" value={agents.length} color={colors.blue} onClick={() => onNavigate('agents')} />
+        <StatCard label="Active Agents" value={activeAgents} color={colors.green} onClick={() => onNavigate('agents')} />
+        <StatCard label="Pending Tasks" value={pendingTasks} color={colors.yellow} onClick={() => onNavigate('tasks')} />
+        <StatCard label="Completed Tasks" value={completedTasks} color={colors.teal} onClick={() => onNavigate('tasks')} />
         {pendingRequests > 0 && (
-          <StatCard label="Pending Requests" value={pendingRequests} color={colors.peach} />
+          <StatCard label="Pending Requests" value={pendingRequests} color={colors.peach} onClick={() => onNavigate('requests')} />
         )}
         {failedTasks > 0 && (
-          <StatCard label="Failed Tasks" value={failedTasks} color={colors.red} />
+          <StatCard label="Failed Tasks" value={failedTasks} color={colors.red} onClick={() => onNavigate('tasks')} />
         )}
       </div>
 

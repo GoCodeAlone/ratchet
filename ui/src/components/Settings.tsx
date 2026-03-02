@@ -9,9 +9,28 @@ import WebhookList from './WebhookList';
 interface ServerInfo {
   version: string;
   uptime: string;
+  started_at?: string;
+  start_time?: string;
   agent_count: number;
   team_count: number;
   plugins?: string[];
+}
+
+function formatUptime(info: ServerInfo): string {
+  const startRaw = info.started_at ?? info.start_time;
+  if (startRaw) {
+    const startMs = new Date(startRaw).getTime();
+    if (!isNaN(startMs)) {
+      const totalSeconds = Math.floor((Date.now() - startMs) / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      if (days > 0) return `${days}d ${hours}h`;
+      if (hours > 0) return `${hours}h ${minutes}m`;
+      return `${minutes}m`;
+    }
+  }
+  return info.uptime ?? 'running';
 }
 
 export default function Settings() {
@@ -75,7 +94,7 @@ export default function Settings() {
         ) : info ? (
           <>
             <InfoRow label="Version" value={info.version ?? 'Unknown'} />
-            <InfoRow label="Uptime" value={info.uptime ?? 'Unknown'} />
+            <InfoRow label="Uptime" value={formatUptime(info)} />
             <InfoRow label="Agents" value={info.agent_count ?? 0} />
             <InfoRow label="Teams" value={info.team_count ?? 0} />
           </>

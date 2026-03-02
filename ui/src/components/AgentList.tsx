@@ -445,6 +445,7 @@ export default function AgentList() {
   }
 
   async function handleStop(id: string) {
+    if (!window.confirm('Are you sure you want to stop this agent?')) return;
     setActionLoading(id + '-stop');
     try {
       await stopAgent(id);

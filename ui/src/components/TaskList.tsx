@@ -743,7 +743,19 @@ export default function TaskList() {
                       selected?.id === task.id ? `${colors.blue}11` : 'transparent',
                   }}
                 >
-                  <td style={{ ...baseStyles.td, fontWeight: '500' }}>{task.title}</td>
+                  <td
+                    style={{
+                      ...baseStyles.td,
+                      fontWeight: '500',
+                      maxWidth: '320px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={task.title}
+                  >
+                    {task.title}
+                  </td>
                   <td style={baseStyles.td}>
                     <StatusBadge status={task.status} />
                   </td>

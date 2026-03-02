@@ -2,11 +2,29 @@ import { useState, type FormEvent } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { colors, baseStyles } from '../theme';
 
+function parseLoginError(raw: string | null): string | null {
+  if (!raw) return null;
+  // The API client throws "HTTP 401: {"error":"invalid credentials"}"
+  // Try to extract the JSON body part after the status prefix
+  const jsonStart = raw.indexOf('{');
+  if (jsonStart !== -1) {
+    try {
+      const parsed = JSON.parse(raw.slice(jsonStart)) as { error?: string; message?: string };
+      if (parsed.error) return parsed.error;
+      if (parsed.message) return parsed.message;
+    } catch {
+      // fall through
+    }
+  }
+  return raw;
+}
+
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, error } = useAuthStore();
+  const displayError = parseLoginError(error);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -53,7 +71,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {error && (
+        {displayError && (
           <div
             style={{
               backgroundColor: `${colors.red}22`,
@@ -65,7 +83,7 @@ export default function LoginPage() {
               marginBottom: '20px',
             }}
           >
-            {error}
+            {displayError}
           </div>
         )}
 
@@ -89,6 +107,7 @@ export default function LoginPage() {
               placeholder="admin"
               autoFocus
               required
+              autoComplete="username"
               style={baseStyles.input}
             />
           </div>
@@ -111,6 +130,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
+              autoComplete="current-password"
               style={baseStyles.input}
             />
           </div>
