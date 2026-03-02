@@ -480,6 +480,7 @@ function NewTaskModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (i
         justifyContent: 'center',
         zIndex: 1000,
       }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
         style={{

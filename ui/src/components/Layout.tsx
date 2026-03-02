@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation, useNavigate as useRouterNavigate, Routes, Route } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme';
 import Dashboard, { NavFilter } from './Dashboard';
@@ -11,6 +12,24 @@ import SkillList from './SkillList';
 import RequestList from './RequestList';
 
 type NavItem = 'dashboard' | 'agents' | 'tasks' | 'messages' | 'projects' | 'requests' | 'skills' | 'settings';
+
+const navPaths: Record<NavItem, string> = {
+  dashboard: '/',
+  agents: '/agents',
+  tasks: '/tasks',
+  messages: '/messages',
+  projects: '/projects',
+  requests: '/requests',
+  skills: '/skills',
+  settings: '/settings',
+};
+
+function pathToNavItem(pathname: string): NavItem {
+  if (pathname === '/') return 'dashboard';
+  const found = (Object.entries(navPaths) as [NavItem, string][])
+    .find(([, path]) => path !== '/' && pathname.startsWith(path));
+  return found ? found[0] : 'dashboard';
+}
 
 // SVG path data for each nav icon (Lucide-style)
 const iconPaths: Record<NavItem, string[]> = {
@@ -36,38 +55,16 @@ const navItems: { id: NavItem; label: string }[] = [
 ];
 
 export default function Layout() {
-  const [active, setActive] = useState<NavItem>('dashboard');
   const [navFilter, setNavFilter] = useState<NavFilter | undefined>(undefined);
   const { user, logout } = useAuthStore();
+  const location = useLocation();
+  const routerNavigate = useRouterNavigate();
+
+  const active = pathToNavItem(location.pathname);
 
   function navigate(page: NavItem, filter?: NavFilter) {
-    setActive(page);
     setNavFilter(filter);
-  }
-
-  function renderContent() {
-    switch (active) {
-      case 'dashboard': return <Dashboard onNavigate={navigate} />;
-      case 'agents': return <AgentList />;
-      case 'tasks': return <TaskList initialFilter={navFilter} />;
-      case 'messages': return <MessageFeed />;
-      case 'projects': return <ProjectList />;
-      case 'requests': return <RequestList />;
-      case 'skills': return <SkillList />;
-      case 'settings': return <Settings />;
-      default: return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', gap: '16px' }}>
-          <div style={{ fontSize: '48px', color: colors.overlay0 }}>404</div>
-          <div style={{ fontSize: '18px', color: colors.subtext0 }}>Page not found</div>
-          <button
-            onClick={() => navigate('dashboard')}
-            style={{ color: colors.blue, background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
-          >
-            &larr; Return to Dashboard
-          </button>
-        </div>
-      );
-    }
+    routerNavigate(navPaths[page]);
   }
 
   return (
@@ -111,7 +108,7 @@ export default function Layout() {
           {navItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => navigate(item.id)}
+              onClick={() => navigate(item.id as NavItem)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -192,7 +189,28 @@ export default function Layout() {
 
         {/* Page content */}
         <div style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-          {renderContent()}
+          <Routes>
+            <Route path="/" element={<Dashboard onNavigate={navigate} />} />
+            <Route path="/agents" element={<AgentList />} />
+            <Route path="/tasks" element={<TaskList initialFilter={navFilter} />} />
+            <Route path="/messages" element={<MessageFeed />} />
+            <Route path="/projects" element={<ProjectList />} />
+            <Route path="/requests" element={<RequestList />} />
+            <Route path="/skills" element={<SkillList />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', gap: '16px' }}>
+                <div style={{ fontSize: '48px', color: colors.overlay0 }}>404</div>
+                <div style={{ fontSize: '18px', color: colors.subtext0 }}>Page not found</div>
+                <button
+                  onClick={() => navigate('dashboard')}
+                  style={{ color: colors.blue, background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                >
+                  &larr; Return to Dashboard
+                </button>
+              </div>
+            } />
+          </Routes>
         </div>
       </div>
     </div>

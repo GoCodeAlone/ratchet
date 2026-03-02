@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "workflow": {
+      "type": "stdio",
+      "command": "wfctl",
+      "args": [
+        "mcp"
+      ],
+      "env": {}
+    }
+  }
+}
