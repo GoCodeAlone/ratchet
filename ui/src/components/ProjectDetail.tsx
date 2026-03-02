@@ -427,6 +427,14 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onBack();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
+
+  useEffect(() => {
     setLoading(true);
     Promise.all([
       fetchProjectTasks(project.id).then(setTasks).catch(() => {}),

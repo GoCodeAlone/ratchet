@@ -229,6 +229,14 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
   const [showSystem, setShowSystem] = useState(false);
 
   useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
     setLoadingTranscripts(true);
     fetchTaskTranscripts(task.id)
       .then((data: TranscriptEntry[]) => setTranscripts(data ?? []))
