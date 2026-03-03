@@ -5,7 +5,7 @@ import Layout from './components/Layout';
 import OAuthCallback from './components/OAuthCallback';
 
 export default function App() {
-  const { isAuthenticated, loadUser } = useAuthStore();
+  const { isAuthenticated, loadUser, token } = useAuthStore();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -19,5 +19,5 @@ export default function App() {
   }
 
   if (!isAuthenticated) return <LoginPage />;
-  return <Layout />;
+  return <Layout key={token || ''} />;
 }

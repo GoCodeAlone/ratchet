@@ -84,7 +84,10 @@ export default function Layout() {
         height: '100%',
         zIndex: 100,
         transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 0.25s ease',
+        visibility: sidebarOpen ? ('visible' as const) : ('hidden' as const),
+        transition: sidebarOpen
+          ? 'transform 0.25s ease, visibility 0s linear 0s'
+          : 'transform 0.25s ease, visibility 0s linear 0.25s',
       }
     : {};
 
