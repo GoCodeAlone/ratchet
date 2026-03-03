@@ -7,6 +7,31 @@ requires:
       version: ">=1.0.0"
 
 modules:
+  # --- Config provider (injects env-based config into pipeline templates) ---
+  - name: config-provider
+    type: config.provider
+    config:
+      sources:
+        - type: env
+      schema:
+        auth_secret:
+          env: RATCHET_AUTH_SECRET
+          required: false
+          default: "ratchet-dev-secret-change-me"
+          sensitive: true
+          desc: "JWT auth middleware secret"
+        login_token:
+          env: RATCHET_LOGIN_TOKEN
+          required: false
+          default: "ratchet-dev-token-change-me-in-production"
+          sensitive: true
+          desc: "Static login token for dev auth"
+        db_path:
+          env: RATCHET_DB_PATH
+          required: false
+          default: "./data/ratchet.db"
+          desc: "SQLite database file path"
+
   # --- HTTP server ---
   - name: ratchet-server
     type: http.server
@@ -42,7 +67,7 @@ modules:
     type: http.middleware.auth
     config:
       authType: Bearer
-      secret: "ratchet-dev-secret-change-me"
+      secret: '{{config "auth_secret"}}'
       excludePaths:
         - "/api/auth/login"
         - "/api/status"
@@ -54,7 +79,7 @@ modules:
   - name: ratchet-db
     type: storage.sqlite
     config:
-      dbPath: "./data/ratchet.db"
+      dbPath: '{{config "db_path"}}'
 
   # --- Messaging broker (in-memory, for future inter-agent messaging) ---
   - name: ratchet-broker

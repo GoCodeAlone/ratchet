@@ -56,10 +56,17 @@ pipelines:
           params: ["{{ step \"find-pending-task\" \"row\" \"id\" }}"]
 
       - name: execute-agent
-        type: step.agent_execute
+        type: step.retry_with_backoff
         config:
-          max_iterations: 10
-          provider_service: ratchet-ai
+          max_retries: 2
+          initial_delay: "2s"
+          max_delay: "10s"
+          multiplier: 2.0
+          step:
+            type: step.agent_execute
+            config:
+              max_iterations: 10
+              provider_service: ratchet-ai
 
       - name: check-agent-result
         type: step.conditional

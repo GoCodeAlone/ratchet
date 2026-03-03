@@ -51,7 +51,7 @@ workflows:
                 status: 200
                 body:
                   # Must match RATCHET_AUTH_TOKEN env var (or this default when unset)
-                  token: "ratchet-dev-token-change-me-in-production"
+                  token: '{{config "login_token"}}'
                   user:
                     id: "admin"
                     username: "admin"
