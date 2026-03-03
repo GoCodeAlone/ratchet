@@ -224,6 +224,8 @@ function TranscriptMessage({ entry }: { entry: TranscriptEntry }) {
 
 function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
   const { agents } = useAgentStore();
+  const { updateTask } = useTaskStore();
+  const [updating, setUpdating] = useState(false);
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
   const [loadingTranscripts, setLoadingTranscripts] = useState(false);
   const [showSystem, setShowSystem] = useState(false);
@@ -254,6 +256,14 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
     }, 5000);
     return () => clearInterval(interval);
   }, [task.id, task.status]);
+
+  async function handleTransition(newStatus: string) {
+    setUpdating(true);
+    try {
+      await updateTask(task.id, { status: newStatus as TaskStatus, assigned_to: task.assigned_to || '', result: task.result || '' });
+    } catch { /* store handles errors */ }
+    finally { setUpdating(false); }
+  }
 
   const assignedAgent = agents.find((a) => a.id === task.assigned_to);
   const statusColor = statusColors[task.status] ?? colors.overlay0;
@@ -316,6 +326,40 @@ function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
           &times;
         </button>
       </div>
+
+      {/* Status transitions */}
+      {task.status !== 'completed' && task.status !== 'assigned' && (
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          {task.status === 'pending' && (
+            <>
+              <button onClick={() => handleTransition('in_progress')} disabled={updating} style={{ ...baseStyles.button.primary, opacity: updating ? 0.6 : 1, fontSize: '13px' }}>
+                Start
+              </button>
+              <button onClick={() => handleTransition('canceled')} disabled={updating} style={{ ...baseStyles.button.danger, opacity: updating ? 0.6 : 1, fontSize: '13px' }}>
+                Cancel
+              </button>
+            </>
+          )}
+          {task.status === 'in_progress' && (
+            <>
+              <button onClick={() => handleTransition('completed')} disabled={updating} style={{ ...baseStyles.button.primary, opacity: updating ? 0.6 : 1, fontSize: '13px' }}>
+                Complete
+              </button>
+              <button onClick={() => handleTransition('failed')} disabled={updating} style={{ ...baseStyles.button.danger, opacity: updating ? 0.6 : 1, fontSize: '13px' }}>
+                Fail
+              </button>
+              <button onClick={() => handleTransition('canceled')} disabled={updating} style={{ ...baseStyles.button.danger, opacity: updating ? 0.6 : 1, fontSize: '13px' }}>
+                Cancel
+              </button>
+            </>
+          )}
+          {(task.status === 'failed' || task.status === 'canceled') && (
+            <button onClick={() => handleTransition('pending')} disabled={updating} style={{ ...baseStyles.button.primary, opacity: updating ? 0.6 : 1, fontSize: '13px' }}>
+              {task.status === 'failed' ? 'Retry' : 'Reopen'}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Description */}
       {task.description && (

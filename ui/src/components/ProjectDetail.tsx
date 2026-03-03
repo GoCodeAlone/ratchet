@@ -10,6 +10,8 @@ import {
   startContainer,
   stopContainer,
   getContainerStatus,
+  deleteProject,
+  updateProject,
 } from '../utils/api';
 
 type Tab = 'tasks' | 'transcripts' | 'repos' | 'workspace';
@@ -425,6 +427,15 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
   const [repos, setRepos] = useState<ProjectRepo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(project.name);
+  const [editDescription, setEditDescription] = useState(project.description || '');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [displayName, setDisplayName] = useState(project.name);
+  const [displayDescription, setDisplayDescription] = useState(project.description || '');
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -443,6 +454,33 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
     ]).finally(() => setLoading(false));
   }, [project.id]);
 
+  async function handleSave() {
+    setSaving(true);
+    setEditError('');
+    try {
+      await updateProject(project.id, { name: editName.trim(), description: editDescription.trim() });
+      setDisplayName(editName.trim());
+      setDisplayDescription(editDescription.trim());
+      setEditing(false);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Failed to update project');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    setEditError('');
+    try {
+      await deleteProject(project.id);
+      onBack();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Failed to delete project');
+      setDeleting(false);
+    }
+  }
+
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'tasks', label: 'Tasks', count: tasks.length },
     { id: 'transcripts', label: 'Transcripts', count: transcripts.length },
@@ -457,14 +495,60 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
         <button onClick={onBack} style={{ background: 'none', border: 'none', color: colors.blue, cursor: 'pointer', fontSize: '13px', padding: 0, marginBottom: '12px' }}>
           &larr; Back to Projects
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h2 style={{ margin: 0, color: colors.text, fontSize: '20px' }}>{project.name}</h2>
-          <span style={{ fontSize: '12px', color: statusColors[project.status] ?? colors.overlay0, backgroundColor: `${statusColors[project.status] ?? colors.overlay0}22`, padding: '2px 10px', borderRadius: '10px', textTransform: 'capitalize' }}>
-            {project.status}
-          </span>
-        </div>
-        {project.description && (
-          <p style={{ margin: '6px 0 0', color: colors.subtext0, fontSize: '14px' }}>{project.description}</p>
+        {editing ? (
+          <div>
+            {editError && (
+              <div style={{ color: colors.red, fontSize: '13px', marginBottom: '10px', padding: '8px 12px', backgroundColor: `${colors.red}11`, borderRadius: '6px' }}>
+                {editError}
+              </div>
+            )}
+            <div style={{ marginBottom: '10px' }}>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Project name"
+                style={{ ...baseStyles.input, fontSize: '16px', fontWeight: '500', marginBottom: '8px', display: 'block', width: '100%', boxSizing: 'border-box' }}
+                data-1p-ignore
+              />
+              <textarea
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="Description (optional)"
+                rows={2}
+                style={{ ...baseStyles.input, resize: 'vertical', fontFamily: 'inherit', display: 'block', width: '100%', boxSizing: 'border-box' }}
+                data-1p-ignore
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={handleSave} disabled={saving || !editName.trim()} style={{ ...baseStyles.button.primary, opacity: saving || !editName.trim() ? 0.6 : 1 }}>
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={() => { setEditing(false); setEditError(''); setEditName(displayName); setEditDescription(displayDescription); }} style={baseStyles.button.secondary}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0, color: colors.text, fontSize: '20px' }}>{displayName}</h2>
+              <span style={{ fontSize: '12px', color: statusColors[project.status] ?? colors.overlay0, backgroundColor: `${statusColors[project.status] ?? colors.overlay0}22`, padding: '2px 10px', borderRadius: '10px', textTransform: 'capitalize' }}>
+                {project.status}
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <button onClick={() => { setEditName(displayName); setEditDescription(displayDescription); setEditing(true); }} style={{ ...baseStyles.button.secondary, fontSize: '12px', padding: '4px 10px' }}>
+                  Edit
+                </button>
+                <button onClick={() => setConfirmDelete(true)} style={{ ...baseStyles.button.danger, fontSize: '12px', padding: '4px 10px' }}>
+                  Delete
+                </button>
+              </div>
+            </div>
+            {displayDescription && (
+              <p style={{ margin: '6px 0 0', color: colors.subtext0, fontSize: '14px' }}>{displayDescription}</p>
+            )}
+          </>
         )}
         {project.workspace_path && (
           <div style={{ marginTop: '8px', fontSize: '12px', color: colors.overlay1, fontFamily: 'monospace' }}>
@@ -538,6 +622,34 @@ export default function ProjectDetail({ project, onBack }: { project: Project; o
         <ReposTab projectId={project.id} />
       ) : (
         <WorkspaceTab project={project} />
+      )}
+
+      {/* Confirm Delete Modal */}
+      {confirmDelete && (
+        <div
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setConfirmDelete(false); setEditError(''); } }}
+        >
+          <div style={{ ...baseStyles.card, width: '400px', padding: '28px' }}>
+            <h3 style={{ margin: '0 0 12px', color: colors.text, fontSize: '16px' }}>Delete Project</h3>
+            <p style={{ margin: '0 0 20px', color: colors.subtext0, fontSize: '14px' }}>
+              Are you sure you want to delete "{displayName}"? This cannot be undone.
+            </p>
+            {editError && (
+              <div style={{ color: colors.red, fontSize: '13px', marginBottom: '12px', padding: '8px 12px', backgroundColor: `${colors.red}11`, borderRadius: '6px' }}>
+                {editError}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => { setConfirmDelete(false); setEditError(''); }} style={baseStyles.button.secondary}>
+                Cancel
+              </button>
+              <button onClick={handleDelete} disabled={deleting} style={{ ...baseStyles.button.danger, opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

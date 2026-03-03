@@ -9,6 +9,7 @@ export const fetchProjects = () => apiGet<Project[]>('/projects');
 export const createProject = (data: { name: string; description?: string; workspace_spec?: WorkspaceSpec }) => apiPost<Project>('/projects', data);
 export const fetchProject = (id: string) => apiGet<Project>(`/projects/${id}`);
 export const updateProject = (id: string, data: Partial<Project>) => apiPatch<Project>(`/projects/${id}`, data);
+export const deleteProject = (id: string) => apiDelete<void>(`/projects/${id}`);
 export const fetchProjectTasks = (id: string) => apiGet<Task[]>(`/projects/${id}/tasks`);
 export const fetchProjectTranscripts = (id: string) => apiGet<TranscriptEntry[]>(`/projects/${id}/transcripts`);
 

@@ -145,6 +145,31 @@ workflows:
                 body:
                   updated: true
 
+      # Delete project
+      - method: DELETE
+        path: "/api/projects/{id}"
+        handler: ratchet-commands
+        middlewares: *auth_mw
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete-project
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM projects WHERE id = ?"
+                params:
+                  - "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  deleted: true
+
       # Get tasks for project
       - method: GET
         path: "/api/projects/{id}/tasks"
