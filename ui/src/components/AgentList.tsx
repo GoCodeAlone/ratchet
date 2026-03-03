@@ -529,7 +529,7 @@ export default function AgentList() {
             Refresh
           </button>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={() => { setSelected(null); setEditAgent(null); setShowModal(true); }}
             style={{ ...baseStyles.button.primary, fontSize: '13px' }}
           >
             + New Agent
@@ -572,7 +572,7 @@ export default function AgentList() {
               {agents.map((agent) => (
                 <tr
                   key={agent.id}
-                  onClick={() => setSelected(selected?.id === agent.id ? null : agent)}
+                  onClick={() => { setShowModal(false); setEditAgent(null); setSelected(selected?.id === agent.id ? null : agent); }}
                   style={{
                     cursor: 'pointer',
                     backgroundColor:
@@ -652,7 +652,7 @@ export default function AgentList() {
                       )}
                       {(agent.status === 'idle' || agent.status === 'stopped' || agent.status === 'error') && (
                         <button
-                          onClick={() => setEditAgent(agent)}
+                          onClick={() => { setSelected(null); setShowModal(false); setEditAgent(agent); }}
                           style={{
                             ...baseStyles.button.secondary,
                             padding: '4px 12px',
