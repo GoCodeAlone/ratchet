@@ -18,13 +18,11 @@ workflows:
         pipeline:
           steps:
             - name: list-agents
-              type: step.db_query_cached
+              type: step.db_query
               config:
                 database: ratchet-db
                 query: "SELECT id, name, role, system_prompt, provider, model, status, team_id, is_lead, created_at, updated_at FROM agents ORDER BY created_at ASC"
                 mode: list
-                cache_key: "agents:list"
-                cache_ttl: "30s"
             - name: respond
               type: step.json_response
               config:
@@ -278,13 +276,11 @@ workflows:
         pipeline:
           steps:
             - name: list-skills
-              type: step.db_query_cached
+              type: step.db_query
               config:
                 database: ratchet-db
                 query: "SELECT id, name, description, content, category, required_tools, created_at FROM skills ORDER BY name ASC"
                 mode: list
-                cache_key: "skills:list"
-                cache_ttl: "5m"
             - name: respond
               type: step.json_response
               config:

@@ -18,13 +18,11 @@ workflows:
         pipeline:
           steps:
             - name: list-providers
-              type: step.db_query_cached
+              type: step.db_query
               config:
                 database: ratchet-db
                 query: "SELECT id, alias, type, model, base_url, secret_name, max_tokens, settings, is_default, status, created_at, updated_at FROM llm_providers ORDER BY created_at ASC"
                 mode: list
-                cache_key: "providers:list"
-                cache_ttl: "2m"
             - name: respond
               type: step.json_response
               config:

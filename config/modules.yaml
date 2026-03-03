@@ -12,6 +12,7 @@ modules:
     type: config.provider
     config:
       sources:
+        - type: defaults
         - type: env
       schema:
         auth_secret:
