@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/CrisisTextLine/modular v1.11.11
-	github.com/GoCodeAlone/workflow v0.3.8
+	github.com/GoCodeAlone/workflow v0.3.10
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/go-rod/rod v0.116.2
 	github.com/google/uuid v1.6.0
