@@ -437,6 +437,7 @@ func TestSecurityAuditor_RunAll(t *testing.T) {
 
 	if report == nil {
 		t.Fatal("expected non-nil report")
+		return
 	}
 	if report.Timestamp.IsZero() {
 		t.Error("expected non-zero timestamp")
@@ -467,6 +468,7 @@ func TestNewSecurityAuditor_HasAllChecks(t *testing.T) {
 	auditor := NewSecurityAuditor(db, app)
 	if auditor == nil {
 		t.Fatal("expected non-nil auditor")
+		return
 	}
 
 	// There should be exactly 12 checks registered.

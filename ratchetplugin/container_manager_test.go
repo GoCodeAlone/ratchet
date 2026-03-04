@@ -390,6 +390,7 @@ func TestContainerControlFactory_DefaultAction(t *testing.T) {
 	step, ok := stepRaw.(*ContainerControlStep)
 	if !ok {
 		t.Fatalf("expected *ContainerControlStep, got %T", stepRaw)
+		return
 	}
 	if step.action != "status" {
 		t.Errorf("expected default action 'status', got %q", step.action)
@@ -462,6 +463,7 @@ func TestAgentExecuteStepFactory_ContainerManagerLookup(t *testing.T) {
 	step, ok := stepRaw.(*AgentExecuteStep)
 	if !ok {
 		t.Fatalf("expected *AgentExecuteStep, got %T", stepRaw)
+		return
 	}
 	if step.app == nil {
 		t.Error("expected app to be set from factory")

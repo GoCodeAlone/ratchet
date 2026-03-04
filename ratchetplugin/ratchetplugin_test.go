@@ -286,6 +286,7 @@ func TestToolRegistry_RegisterAndGet(t *testing.T) {
 	got, ok := tr.Get("read_file")
 	if !ok {
 		t.Fatal("expected tool to be found")
+		return
 	}
 	if got.Name() != "read_file" {
 		t.Errorf("expected name read_file, got %s", got.Name())
@@ -362,6 +363,7 @@ func TestToolRegistry_Execute_NotFound(t *testing.T) {
 	_, err := tr.Execute(context.Background(), "missing", nil)
 	if err == nil {
 		t.Fatal("expected error for unknown tool")
+		return
 	}
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("expected 'not found' in error, got %q", err.Error())
@@ -553,6 +555,7 @@ func TestSSEHub_Factory_DefaultPath(t *testing.T) {
 	hub, ok := mod.(*SSEHub)
 	if !ok {
 		t.Fatal("expected *SSEHub")
+		return
 	}
 	if hub.Name() != "my-hub" {
 		t.Errorf("expected name my-hub, got %s", hub.Name())
@@ -819,6 +822,7 @@ func TestWorkspaceInitStep_Execute_EmptyProjectID(t *testing.T) {
 	_, err := step.Execute(context.Background(), pc)
 	if err == nil {
 		t.Fatal("expected error for empty project_id")
+		return
 	}
 	if !strings.Contains(err.Error(), "project_id is required") {
 		t.Errorf("unexpected error: %v", err)
@@ -836,6 +840,7 @@ func TestWorkspaceInitFactory_DefaultDataDir(t *testing.T) {
 	step, ok := stepRaw.(*WorkspaceInitStep)
 	if !ok {
 		t.Fatalf("expected *WorkspaceInitStep, got %T", stepRaw)
+		return
 	}
 	if step.dataDir != "./data" {
 		t.Errorf("expected default data_dir ./data, got %q", step.dataDir)
@@ -976,6 +981,7 @@ func TestPlugin_New(t *testing.T) {
 	p := New()
 	if p == nil {
 		t.Fatal("New() returned nil")
+		return
 	}
 	if p.PluginName != "ratchet" {
 		t.Errorf("expected plugin name 'ratchet', got %q", p.PluginName)

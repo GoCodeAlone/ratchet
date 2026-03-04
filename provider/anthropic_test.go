@@ -225,6 +225,7 @@ func TestAnthropicChatAPIError(t *testing.T) {
 	}, nil)
 	if err == nil {
 		t.Fatal("expected error for 401 response")
+		return
 	}
 	if !contains(err.Error(), "401") {
 		t.Errorf("expected error to mention 401, got: %v", err)

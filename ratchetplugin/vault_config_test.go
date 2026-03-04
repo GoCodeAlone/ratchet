@@ -39,6 +39,7 @@ func TestSaveAndLoadVaultConfig(t *testing.T) {
 	}
 	if got == nil {
 		t.Fatal("expected non-nil config")
+		return
 	}
 	if got.Backend != want.Backend {
 		t.Errorf("backend: got %q, want %q", got.Backend, want.Backend)
