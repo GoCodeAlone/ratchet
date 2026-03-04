@@ -1,0 +1,17 @@
+name: sub-agent-child
+loop: false
+description: >
+  Child (ephemeral sub-agent) scenario. Used when a spawned sub-agent executes
+  its assigned task. The sub-agent performs its work and reports completion.
+  Note: in the standard E2E test the spawned task is not executed by agent-tick
+  because the ephemeral agent has status=busy; this scenario is provided for
+  completeness and future direct-execution use cases.
+steps:
+  - content: "Starting file analysis task as assigned by parent agent."
+    tool_calls:
+      - name: file_list
+        arguments:
+          path: "."
+  - content: >
+      File analysis complete. Found source files in workspace.
+      Reporting results back to parent agent. Task complete.

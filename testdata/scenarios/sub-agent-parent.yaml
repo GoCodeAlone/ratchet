@@ -1,0 +1,33 @@
+name: sub-agent-parent
+loop: false
+description: >
+  Parent agent scenario for sub-agent spawning. The parent spawns an ephemeral
+  sub-agent to handle a delegated task, calls agent_wait (which returns quickly
+  since the scripted provider uses a placeholder task_id), saves findings to
+  memory, and completes. Tests agent_spawn and agent_wait tool invocation.
+  Note: the scripted test provider cannot reference dynamic tool results between
+  steps, so agent_wait uses a placeholder task_id; this tests the tool chain
+  without requiring the sub-agent to actually complete.
+steps:
+  - content: "I'll delegate the file analysis to a sub-agent and wait for the result."
+    tool_calls:
+      - name: agent_spawn
+        arguments:
+          name: "file-analyzer"
+          task_description: "Analyze the source files in the workspace and report findings"
+          system_prompt: "You are a specialized file analysis sub-agent. Analyze files and report findings."
+  - content: "Waiting for the sub-agent to complete its analysis."
+    tool_calls:
+      - name: agent_wait
+        arguments:
+          task_ids: ["sub-agent-test-task"]
+          timeout_seconds: 5
+  - content: "Sub-agent coordination complete. Saving delegation pattern to memory."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Agent delegation pattern: spawned ephemeral sub-agent via agent_spawn, waited for results via agent_wait. Coordination mechanism verified."
+          category: "fact"
+  - content: >
+      Sub-agent spawning complete. Successfully delegated to ephemeral sub-agent,
+      waited for result, and recorded coordination pattern in memory. Task done.
