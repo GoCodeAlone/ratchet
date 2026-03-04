@@ -1,0 +1,113 @@
+# Development Review Pipeline
+# Periodic code review and tech debt analysis by the development agent.
+# Triggered by config/triggers.yaml on a 10-minute cron schedule.
+
+pipelines:
+  dev-review:
+    description: "Periodic code review and tech debt analysis"
+    steps:
+      # Find the development agent (role = 'development') — skip if none configured
+      - name: find-dev-agent
+        type: step.db_query
+        config:
+          database: ratchet-db
+          query: >
+            SELECT id, name, system_prompt, provider FROM agents
+            WHERE role = 'development' AND status != 'stopped'
+            ORDER BY created_at ASC LIMIT 1
+          mode: single
+
+      # Skip the full pipeline if no development agent is configured
+      - name: check-agent-exists
+        type: step.conditional
+        config:
+          field: "steps.find-dev-agent.found"
+          routes:
+            "false": no-dev-agent
+          default: check-busy
+
+      # Also skip if the agent is already busy
+      - name: check-busy
+        type: step.db_query
+        config:
+          database: ratchet-db
+          query: >
+            SELECT COUNT(*) as busy FROM tasks
+            WHERE assigned_to = ? AND status = 'in_progress'
+          params:
+            - '{{ step "find-dev-agent" "row" "id" }}'
+          mode: single
+
+      - name: check-not-busy
+        type: step.conditional
+        config:
+          field: "steps.check-busy.row.busy"
+          routes:
+            "0": create-review-task
+          default: agent-busy
+
+      # Create a code review task for the development agent
+      - name: create-review-task
+        type: step.db_exec
+        config:
+          database: ratchet-db
+          query: >
+            INSERT INTO tasks (id, title, description, status, priority, assigned_to, created_at, updated_at)
+            VALUES (lower(hex(randomblob(16))), 'Code Review', 'Run a comprehensive code review. Analyze for lint issues, complexity hotspots, and tech debt markers. Check memory for previously identified patterns and track new findings.', 'pending', 3, ?, datetime('now'), datetime('now'))
+          params:
+            - '{{ step "find-dev-agent" "row" "id" }}'
+
+      # Populate Current with agent data for step.agent_execute
+      - name: prepare-agent-context
+        type: step.set
+        config:
+          values:
+            agent_id: '{{ step "find-dev-agent" "row" "id" }}'
+            agent_name: '{{ step "find-dev-agent" "row" "name" }}'
+            system_prompt: '{{ step "find-dev-agent" "row" "system_prompt" }}'
+            task: >
+              Run a comprehensive code review on the current codebase. Use code_review to check for lint
+              issues, code_complexity to find hotspots and tech debt markers. Check memory_search for
+              previously identified patterns. Save new findings with memory_save. Report a structured
+              summary noting any recurring patterns.
+
+      - name: execute-dev-agent
+        type: step.agent_execute
+        config:
+          max_iterations: 15
+          provider_service: ratchet-ai
+          approval_timeout: "10m"
+          loop_detection:
+            max_consecutive: 3
+            max_errors: 2
+
+      - name: mark-task-done
+        type: step.db_exec
+        config:
+          database: ratchet-db
+          query: >
+            UPDATE tasks SET status = 'completed',
+            result = ?, completed_at = datetime('now'), updated_at = datetime('now')
+            WHERE assigned_to = ? AND title = 'Code Review' AND status = 'pending'
+          params:
+            - '{{ step "execute-dev-agent" "result" | default "completed" }}'
+            - '{{ step "find-dev-agent" "row" "id" }}'
+
+      - name: log-result
+        type: step.log
+        config:
+          message: "Code review complete for agent {{ step \"find-dev-agent\" \"row\" \"id\" }}"
+          level: info
+
+      # Terminal steps (skipped execution paths)
+      - name: no-dev-agent
+        type: step.log
+        config:
+          message: "dev-review: no development agent configured — skipping"
+          level: debug
+
+      - name: agent-busy
+        type: step.log
+        config:
+          message: "dev-review: development agent is busy — skipping this cycle"
+          level: debug

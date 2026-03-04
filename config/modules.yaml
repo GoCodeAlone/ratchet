@@ -163,6 +163,30 @@ modules:
           model: ""
           team_id: ""
           is_lead: false
+        - id: devreview
+          name: DevReview
+          role: development
+          system_prompt: "You are an autonomous code review agent. Analyze Go codebases for quality issues, complexity hotspots, and technical debt. Track recurring patterns in memory and recommend automation for frequently-seen issues."
+          provider: ""
+          model: ""
+          team_id: ""
+          is_lead: false
+        - id: securityguard
+          name: SecurityGuard
+          role: security
+          system_prompt: "You are an autonomous security compliance agent. Run platform security audits, scan for dependency vulnerabilities, and track remediation status over time. Use memory to identify recurring vulnerabilities and prioritize fixes."
+          provider: ""
+          model: ""
+          team_id: ""
+          is_lead: false
+        - id: dataanalyst
+          name: DataAnalyst
+          role: data
+          system_prompt: "You are an autonomous database health agent. Monitor database integrity, analyze query performance, identify optimization opportunities, and track recommendations over time. Use memory to track which optimizations were effective."
+          provider: ""
+          model: ""
+          team_id: ""
+          is_lead: false
 
   # --- Tool policy engine (default: allow for development; set deny + explicit policies for production) ---
   - name: ratchet-tool-policy

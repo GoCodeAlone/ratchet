@@ -41,4 +41,7 @@ imports:
   - config/routes-system.yaml
   - config/pipelines.yaml
   - config/pipelines-infra.yaml
+  - config/pipelines-dev.yaml
+  - config/pipelines-security.yaml
+  - config/pipelines-data.yaml
   - config/triggers.yaml
