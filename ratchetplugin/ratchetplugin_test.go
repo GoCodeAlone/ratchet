@@ -144,6 +144,7 @@ func TestNewSecretGuard(t *testing.T) {
 	sg := NewSecretGuard(p, "file")
 	if sg == nil {
 		t.Fatal("NewSecretGuard returned nil")
+		return
 	}
 	if sg.provider == nil {
 		t.Fatal("provider is nil")

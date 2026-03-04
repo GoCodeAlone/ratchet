@@ -10,6 +10,7 @@ func TestNewBrowserManager(t *testing.T) {
 	bm := NewBrowserManager(true)
 	if bm == nil {
 		t.Fatal("expected non-nil BrowserManager")
+		return
 	}
 	if bm.browser != nil {
 		t.Error("expected browser to be nil before first GetPage call (lazy init)")

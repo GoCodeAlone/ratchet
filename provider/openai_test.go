@@ -498,6 +498,7 @@ func TestOpenAIStreamWithToolCall(t *testing.T) {
 
 	if toolEvent == nil {
 		t.Fatal("expected tool_call event")
+		return
 	}
 	if toolEvent.Tool.ID != "call_xyz" {
 		t.Errorf("expected tool ID call_xyz, got %s", toolEvent.Tool.ID)
