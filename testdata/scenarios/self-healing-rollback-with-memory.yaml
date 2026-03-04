@@ -1,0 +1,52 @@
+name: self-healing-rollback-with-memory
+loop: false
+description: >
+  Enhanced self-healing scenario that includes memory search (check for past incidents)
+  and memory save (record remediation outcome). Demonstrates the learning loop.
+
+steps:
+  # Turn 1: Check memory for past incidents before health check
+  - content: "Checking memory for past infrastructure incidents before running health check."
+    tool_calls:
+      - name: memory_search
+        arguments:
+          query: "infrastructure incident remediation rollback pod failure"
+          limit: 5
+
+  # Turn 2: Run health check — finds unhealthy pod
+  - content: "No relevant past incidents found. Running infrastructure health check."
+    tool_calls:
+      - name: infra_health_check
+        arguments: {}
+
+  # Turn 3: Roll back the broken deployment
+  - content: >
+      Health check detected an unhealthy pod. Rolling back the deployment
+      to the previous known-good revision.
+    tool_calls:
+      - name: k8s_rollback
+        arguments:
+          deployment: "infra-test-app"
+          namespace: "default"
+
+  # Turn 4: Verify the rollback restored pod health
+  - content: "Rollback initiated. Verifying pod health."
+    tool_calls:
+      - name: k8s_get_pods
+        arguments:
+          namespace: "default"
+          selector: "app=infra-test-app"
+
+  # Turn 5: Save remediation outcome to memory
+  - content: "Saving remediation outcome to memory for future reference."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Infrastructure incident resolved: infra-test-app had ImagePullBackOff due to nonexistent image. Remediation: kubectl rollback to previous revision restored service. Time to resolution: <1 minute. Root cause: bad image tag in deployment spec."
+          category: "fact"
+
+  # Turn 6: Final summary — no tool_calls exits the agent loop
+  - content: >
+      Remediation complete. The infra-test-app deployment was rolled back from the
+      failing revision to the previous stable revision. Pod is running normally.
+      Outcome saved to memory for future incident correlation.
