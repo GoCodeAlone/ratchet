@@ -155,10 +155,10 @@ func extractPodSummaries(raw map[string]any) []map[string]any {
 		}
 
 		s := map[string]any{
-			"name":      name,
-			"phase":     phase,
-			"ready":     fmt.Sprintf("%d/%d", ready, total),
-			"restarts":  totalRestarts,
+			"name":       name,
+			"phase":      phase,
+			"ready":      fmt.Sprintf("%d/%d", ready, total),
+			"restarts":   totalRestarts,
 			"start_time": startTime,
 		}
 		if waitingReason != "" {
@@ -235,15 +235,15 @@ func (t *K8sGetEventsTool) Execute(ctx context.Context, args map[string]any) (an
 		involvedObj, _ := evt["involvedObject"].(map[string]any)
 
 		events = append(events, map[string]any{
-			"name":            meta["name"],
-			"reason":          evt["reason"],
-			"message":         evt["message"],
-			"type":            evt["type"],
-			"count":           evt["count"],
-			"first_time":      evt["firstTimestamp"],
-			"last_time":       evt["lastTimestamp"],
-			"object_kind":     involvedObj["kind"],
-			"object_name":     involvedObj["name"],
+			"name":             meta["name"],
+			"reason":           evt["reason"],
+			"message":          evt["message"],
+			"type":             evt["type"],
+			"count":            evt["count"],
+			"first_time":       evt["firstTimestamp"],
+			"last_time":        evt["lastTimestamp"],
+			"object_kind":      involvedObj["kind"],
+			"object_name":      involvedObj["name"],
 			"object_namespace": involvedObj["namespace"],
 		})
 	}
@@ -684,7 +684,7 @@ func (t *InfraHealthCheckTool) Execute(ctx context.Context, args map[string]any)
 					if waiting, ok := state["waiting"].(map[string]any); ok {
 						reason, _ := waiting["reason"].(string)
 						if reason == "CrashLoopBackOff" || reason == "OOMKilled" || reason == "Error" ||
-						reason == "ImagePullBackOff" || reason == "ErrImagePull" || reason == "CreateContainerConfigError" {
+							reason == "ImagePullBackOff" || reason == "ErrImagePull" || reason == "CreateContainerConfigError" {
 							unhealthyPods++
 							issues = append(issues, issueRecord{
 								Pod:       podName,
@@ -737,10 +737,10 @@ func (t *InfraHealthCheckTool) Execute(ctx context.Context, args map[string]any)
 	}
 
 	return map[string]any{
-		"health_score": score,
-		"severity":     severity,
-		"total_pods":   totalPods,
+		"health_score":   score,
+		"severity":       severity,
+		"total_pods":     totalPods,
 		"unhealthy_pods": unhealthyPods,
-		"issues":       issues,
+		"issues":         issues,
 	}, nil
 }

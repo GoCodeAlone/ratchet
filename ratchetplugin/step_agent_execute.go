@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/CrisisTextLine/modular"
-	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
 	"github.com/GoCodeAlone/ratchet/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
+	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
 	"github.com/GoCodeAlone/workflow/module"
 	"github.com/GoCodeAlone/workflow/plugin"
 	"github.com/google/uuid"

@@ -17,8 +17,8 @@ import (
 	"github.com/GoCodeAlone/ratchet/ratchetplugin"
 	"github.com/GoCodeAlone/workflow"
 	"github.com/GoCodeAlone/workflow/config"
-	_ "github.com/GoCodeAlone/workflow/setup"
 	"github.com/GoCodeAlone/workflow/plugins/all"
+	_ "github.com/GoCodeAlone/workflow/setup"
 	_ "modernc.org/sqlite"
 )
 

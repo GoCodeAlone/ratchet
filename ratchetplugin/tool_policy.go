@@ -212,10 +212,10 @@ func policyMatchesTool(pattern, toolName string) bool {
 // YAML config. The actual engine is wired by toolPolicyEngineHook.
 type toolPolicyConfigModule struct{ name string }
 
-func (m *toolPolicyConfigModule) Name() string                                      { return m.name }
-func (m *toolPolicyConfigModule) Init(_ modular.Application) error                  { return nil }
-func (m *toolPolicyConfigModule) ProvidesServices() []modular.ServiceProvider       { return nil }
-func (m *toolPolicyConfigModule) RequiresServices() []modular.ServiceDependency     { return nil }
+func (m *toolPolicyConfigModule) Name() string                                  { return m.name }
+func (m *toolPolicyConfigModule) Init(_ modular.Application) error              { return nil }
+func (m *toolPolicyConfigModule) ProvidesServices() []modular.ServiceProvider   { return nil }
+func (m *toolPolicyConfigModule) RequiresServices() []modular.ServiceDependency { return nil }
 
 // newToolPolicyModuleFactory returns a module factory for ratchet.tool_policy_engine.
 // This registers the module type so config validation accepts it. The actual engine

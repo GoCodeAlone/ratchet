@@ -3,9 +3,9 @@ package ratchetplugin
 import (
 	"context"
 
+	"github.com/GoCodeAlone/ratchet/provider"
 	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
 	agentprovider "github.com/GoCodeAlone/workflow-plugin-agent/provider"
-	"github.com/GoCodeAlone/ratchet/provider"
 )
 
 // agentProviderAdapter wraps a workflow-plugin-agent provider.Provider and
