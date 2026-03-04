@@ -39,8 +39,11 @@ func (t *MessageSendTool) Execute(ctx context.Context, args map[string]any) (any
 		return nil, fmt.Errorf("to and content are required")
 	}
 
-	// from_agent will be set by the caller via context or args
+	// from_agent from args, falling back to the executing agent's ID from context
 	from, _ := args["from"].(string)
+	if from == "" {
+		from, _ = AgentIDFromContext(ctx)
+	}
 
 	id := uuid.New().String()
 	_, err := t.DB.ExecContext(ctx,
