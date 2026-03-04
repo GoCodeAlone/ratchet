@@ -1,0 +1,24 @@
+name: approval-flow
+loop: false
+description: >
+  Approval gate scenario. The agent requests human approval before
+  proceeding with a sensitive action (blocking). The E2E test approves
+  via /api/approvals/{id}/approve. After approval, the agent saves
+  the outcome to memory and completes.
+steps:
+  - content: "I need to perform a sensitive deployment action. Requesting human approval before proceeding."
+    tool_calls:
+      - name: request_approval
+        arguments:
+          action: "deploy to production"
+          reason: "Deploying v2.3.1 to production environment — requires sign-off before rollout"
+          details: "Image: app:v2.3.1, replicas: 3, namespace: production"
+  - content: "Approval received. Saving deployment decision to memory for audit trail."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Production deployment approved: app:v2.3.1 deployed to production namespace with 3 replicas. Approval received from human operator."
+          category: "fact"
+  - content: >
+      Approval flow complete. Requested human approval for production deployment,
+      received approval, and saved audit record to memory. Deployment may proceed.
