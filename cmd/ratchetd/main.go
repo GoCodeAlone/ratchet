@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	agent "github.com/GoCodeAlone/workflow-plugin-agent"
 	"github.com/GoCodeAlone/ratchet/internal/version"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin"
 	"github.com/GoCodeAlone/workflow"
@@ -45,6 +46,7 @@ func main() {
 		WithAllDefaults().
 		WithLogger(logger).
 		WithPlugins(all.DefaultPlugins()...).
+		WithPlugin(agent.New()).
 		WithPlugin(ratchetplugin.New()).
 		BuildFromConfig(cfg)
 	if err != nil {

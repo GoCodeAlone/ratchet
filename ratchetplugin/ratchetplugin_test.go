@@ -988,8 +988,9 @@ func TestPlugin_ModuleFactories(t *testing.T) {
 	p := New()
 	factories := p.ModuleFactories()
 
+	// ratchet.ai_provider has been removed; it is now provided by workflow-plugin-agent
+	// as "agent.provider". Only ratchet-specific module types remain here.
 	expected := []string{
-		"ratchet.ai_provider",
 		"ratchet.sse_hub",
 		"ratchet.scheduler",
 		"ratchet.mcp_client",
@@ -1010,10 +1011,13 @@ func TestPlugin_StepFactories(t *testing.T) {
 	p := New()
 	factories := p.StepFactories()
 
+	// step.provider_test and step.provider_models have been removed from ratchetplugin;
+	// they are now provided by workflow-plugin-agent. step.agent_execute remains here
+	// as ratchet's richer override (browser, sub-agent, skill injection, etc.).
 	expected := []string{
 		"step.agent_execute", "step.workspace_init", "step.container_control",
-		"step.secret_manage", "step.provider_test", "step.vault_config",
-		"step.provider_models", "step.mcp_reload", "step.oauth_exchange",
+		"step.secret_manage", "step.vault_config",
+		"step.mcp_reload", "step.oauth_exchange",
 		"step.approval_resolve", "step.webhook_process", "step.security_audit",
 		"step.test_interact", "step.human_request_resolve",
 	}

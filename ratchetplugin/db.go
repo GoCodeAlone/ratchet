@@ -341,7 +341,8 @@ func dbInitHook() plugin.WiringHook {
 				return nil
 			}
 			for _, modCfg := range cfg.Modules {
-				if modCfg.Type != "ratchet.ai_provider" {
+				// Support both the legacy ratchet.ai_provider type and the new agent.provider type.
+				if modCfg.Type != "ratchet.ai_provider" && modCfg.Type != "agent.provider" {
 					continue
 				}
 				agentsRaw, ok := modCfg.Config["agents"]

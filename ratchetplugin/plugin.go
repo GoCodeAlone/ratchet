@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/CrisisTextLine/modular"
+	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
 	"github.com/GoCodeAlone/ratchet/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 	"github.com/GoCodeAlone/workflow/capability"
@@ -38,8 +39,8 @@ func New() *RatchetPlugin {
 				Version:     "1.0.0",
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
-				ModuleTypes: []string{"ratchet.ai_provider", "ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.provider_test", "step.vault_config", "step.provider_models", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact", "step.human_request_resolve"},
+				ModuleTypes: []string{"ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server"},
+				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.vault_config", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact", "step.human_request_resolve"},
 				WiringHooks: []string{"ratchet.sse_route_registration", "ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.human_request_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
 			},
 		},
@@ -52,9 +53,10 @@ func (p *RatchetPlugin) Capabilities() []capability.Contract {
 }
 
 // ModuleFactories returns the module factories registered by this plugin.
+// Note: "agent.provider" is now provided by the workflow-plugin-agent plugin;
+// ratchet.ai_provider has been removed in favour of that generic module type.
 func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 	return map[string]plugin.ModuleFactory{
-		"ratchet.ai_provider":        newAIProviderFactory(),
 		"ratchet.sse_hub":            newSSEHubFactory(),
 		"ratchet.scheduler":          newSchedulerFactory(),
 		"ratchet.mcp_client":         newMCPClientFactory(),
@@ -64,15 +66,16 @@ func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 }
 
 // StepFactories returns the pipeline step factories registered by this plugin.
+// step.agent_execute overrides the generic version from workflow-plugin-agent with
+// ratchet's richer implementation (browser, sub-agent, skill injection, etc.).
+// step.provider_test and step.provider_models are now provided by the agent plugin.
 func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 	return map[string]plugin.StepFactory{
 		"step.agent_execute":         newAgentExecuteStepFactory(),
 		"step.workspace_init":        newWorkspaceInitFactory(),
 		"step.container_control":     newContainerControlFactory(),
 		"step.secret_manage":         newSecretManageFactory(),
-		"step.provider_test":         newProviderTestFactory(),
 		"step.vault_config":          newVaultConfigFactory(),
-		"step.provider_models":       newProviderModelsFactory(),
 		"step.mcp_reload":            newMCPReloadFactory(),
 		"step.oauth_exchange":        newOAuthExchangeFactory(),
 		"step.approval_resolve":      newApprovalResolveFactory(),
@@ -109,23 +112,6 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 // ModuleSchemas returns schema definitions for IDE completions and config validation.
 func (p *RatchetPlugin) ModuleSchemas() []*schema.ModuleSchema {
 	return []*schema.ModuleSchema{
-		{
-			Type:        "ratchet.ai_provider",
-			Label:       "AI Provider",
-			Category:    "AI",
-			Description: "Wraps an AI provider (mock, test, anthropic, openai) as a module for agent execution.",
-			ConfigFields: []schema.ConfigFieldDef{
-				{Key: "provider", Label: "Provider Type", Type: schema.FieldTypeSelect, Options: []string{"mock", "test", "anthropic", "openai"}, DefaultValue: "mock", Description: "AI provider backend"},
-				{Key: "model", Label: "Model", Type: schema.FieldTypeString, Description: "Model identifier (e.g., claude-sonnet-4-20250514)"},
-				{Key: "responses", Label: "Mock Responses", Type: schema.FieldTypeArray, ArrayItemType: "string", Description: "Scripted responses for mock provider"},
-				{Key: "test_mode", Label: "Test Mode", Type: schema.FieldTypeSelect, Options: []string{"scripted", "channel", "http"}, DefaultValue: "scripted", Description: "Test provider mode"},
-				{Key: "scenario_file", Label: "Scenario File", Type: schema.FieldTypeFilePath, Description: "YAML file with test scenario steps"},
-				{Key: "loop", Label: "Loop Responses", Type: schema.FieldTypeBool, DefaultValue: false, Description: "Loop scripted responses when exhausted"},
-				{Key: "timeout", Label: "Timeout", Type: schema.FieldTypeDuration, Description: "Timeout for test provider HTTP mode"},
-				{Key: "agents", Label: "Agent Seeds", Type: schema.FieldTypeJSON, Description: "Array of agent definitions to seed on startup"},
-			},
-			DefaultConfig: map[string]any{"provider": "mock"},
-		},
 		{
 			Type:        "ratchet.sse_hub",
 			Label:       "SSE Hub",
@@ -550,16 +536,55 @@ func subAgentManagerHook() plugin.WiringHook {
 // testInteractionHook wires the HTTPSource from a test provider into the
 // service registry and connects it to the SSE hub for push notifications.
 // This runs at low priority so all other services are already available.
+//
+// Handles "ratchet.ai_provider" modules (legacy). For the new "agent.provider"
+// type from workflow-plugin-agent, the HTTPSource wiring is handled separately
+// via the agent plugin's own mechanisms.
 func testInteractionHook() plugin.WiringHook {
 	return plugin.WiringHook{
 		Name:     "ratchet.test_interaction",
 		Priority: 50,
 		Hook: func(app modular.Application, cfg *config.WorkflowConfig) error {
-			// Find AIProviderModule instances and check for HTTPSource
 			if cfg == nil {
 				return nil
 			}
 			for _, modCfg := range cfg.Modules {
+				// Handle legacy ratchet.ai_provider modules only.
+				// agent.provider modules from the agent plugin are handled differently.
+				if modCfg.Type == "agent.provider" {
+					// For agent.provider, check if there's a ProviderModule with a
+					// ratchet-compatible Provider we can wire into the ProviderRegistry.
+					svc, ok := app.SvcRegistry()[modCfg.Name]
+					if !ok {
+						continue
+					}
+					agentMod, ok := svc.(*agentplugin.ProviderModule)
+					if !ok {
+						continue
+					}
+					testProvider := agentProviderToRatchet(agentMod)
+					if testProvider == nil {
+						continue
+					}
+					// Check if provider config is "test" mode — only override registry for test providers.
+					if provType, _ := modCfg.Config["provider"].(string); provType != "test" {
+						continue
+					}
+					if regSvc, ok := app.SvcRegistry()["ratchet-provider-registry"]; ok {
+						if registry, ok := regSvc.(*ProviderRegistry); ok {
+							registry.factories["test"] = func(_ string, _ LLMProviderConfig) (provider.Provider, error) {
+								return testProvider, nil
+							}
+							if registry.db != nil {
+								_, _ = registry.db.Exec(`UPDATE llm_providers SET type = 'test', alias = 'test' WHERE id = 'mock-default'`)
+								registry.InvalidateCache()
+							}
+							app.Logger().Info("test interaction hook: registered agent.provider test factory in ratchet provider registry")
+						}
+					}
+					continue
+				}
+
 				if modCfg.Type != "ratchet.ai_provider" {
 					continue
 				}

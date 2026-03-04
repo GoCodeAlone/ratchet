@@ -4,7 +4,8 @@ go 1.26
 
 require (
 	github.com/CrisisTextLine/modular v1.11.11
-	github.com/GoCodeAlone/workflow v0.3.10
+	github.com/GoCodeAlone/workflow v0.3.11
+	github.com/GoCodeAlone/workflow-plugin-agent v0.1.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/go-rod/rod v0.116.2
 	github.com/google/uuid v1.6.0
@@ -22,7 +23,6 @@ require (
 	cloud.google.com/go/iam v1.5.3 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
 	cloud.google.com/go/storage v1.60.0 // indirect
-	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/CrisisTextLine/modular/modules/auth v0.4.0 // indirect
 	github.com/CrisisTextLine/modular/modules/cache v0.4.0 // indirect
@@ -136,7 +136,6 @@ require (
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
-	github.com/moby/sys/sequential v0.6.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

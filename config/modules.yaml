@@ -106,8 +106,9 @@ modules:
 
   # --- AI provider (mock for development; swap provider: anthropic for production) ---
   # For interactive QA testing, set provider: test, test_mode: http, timeout: 300
+  # Uses the generic agent.provider module type from workflow-plugin-agent.
   - name: ratchet-ai
-    type: ratchet.ai_provider
+    type: agent.provider
     config:
       provider: mock
       responses:

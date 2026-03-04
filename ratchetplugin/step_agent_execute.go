@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/CrisisTextLine/modular"
+	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
 	"github.com/GoCodeAlone/ratchet/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 	"github.com/GoCodeAlone/workflow/module"
@@ -68,7 +69,7 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		}
 	}
 
-	// Path 2: Fall back to AIProviderModule lookup
+	// Path 2: Fall back to provider module lookup (handles both ratchet and agent plugin modules)
 	if aiProvider == nil {
 		providerSvcRaw, err := s.tmpl.Resolve(s.providerService, pc)
 		if err != nil {
@@ -80,11 +81,16 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		if !ok {
 			return nil, fmt.Errorf("agent_execute step %q: provider service %q not found", s.name, providerSvcName)
 		}
-		providerMod, ok := svc.(*AIProviderModule)
-		if !ok {
-			return nil, fmt.Errorf("agent_execute step %q: service %q is not an AIProviderModule", s.name, providerSvcName)
+		// Handle both the legacy AIProviderModule (ratchet.ai_provider) and the new
+		// ProviderModule (agent.provider) from workflow-plugin-agent.
+		switch mod := svc.(type) {
+		case *AIProviderModule:
+			aiProvider = mod.Provider()
+		case *agentplugin.ProviderModule:
+			aiProvider = agentProviderToRatchet(mod)
+		default:
+			return nil, fmt.Errorf("agent_execute step %q: service %q is not a recognized provider module (got %T)", s.name, providerSvcName, svc)
 		}
-		aiProvider = providerMod.Provider()
 	}
 
 	// Lazy-lookup services from the registry. These are registered by wiring hooks

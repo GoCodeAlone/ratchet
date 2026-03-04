@@ -42,8 +42,10 @@ github.com/CrisisTextLine/modular/modules/scheduler v0.4.0 h1:PDYAD+hL7E6mM7YJey
 github.com/CrisisTextLine/modular/modules/scheduler v0.4.0/go.mod h1:ULpROdMxp2/3OeUFTjDtLd3cqYVf4gyu90j6C+jjgQY=
 github.com/DataDog/datadog-go/v5 v5.4.0 h1:Ea3eXUVwrVV28F/fo3Dr3aa+TL/Z7Xi6SUPKW8L99aI=
 github.com/DataDog/datadog-go/v5 v5.4.0/go.mod h1:K9kcYBlxkcPP8tvvjZZKs/m1edNAUFzBbdpTUKfCsuw=
-github.com/GoCodeAlone/workflow v0.3.10 h1:wBrPI1TRCIsZf3rZ6tbiVQaRrTOyzzoNPXofCDj+PT8=
-github.com/GoCodeAlone/workflow v0.3.10/go.mod h1:nzM8oUW0g/zGwc5Gaei7C0JHHmeHXdQcx0hqrN1pvQQ=
+github.com/GoCodeAlone/workflow v0.3.11 h1:qRdpgd6JpiPBAXhukv3rtsUnsF3HldjwMCVZHLq1Ofc=
+github.com/GoCodeAlone/workflow v0.3.11/go.mod h1:nzM8oUW0g/zGwc5Gaei7C0JHHmeHXdQcx0hqrN1pvQQ=
+github.com/GoCodeAlone/workflow-plugin-agent v0.1.0 h1:oMml6a+8olQHO0PDjLCzbT0Ge0jXYL+DVP0WadihjDU=
+github.com/GoCodeAlone/workflow-plugin-agent v0.1.0/go.mod h1:6XDeyptKoFGSlZdr3y0TFp0nGxFmuIrWl0UFi7633HU=
 github.com/GoCodeAlone/yaegi v0.17.1 h1:aPAwU29L9cGceRAff02c5pjQcT5KapDB4fWFZK9tElE=
 github.com/GoCodeAlone/yaegi v0.17.1/go.mod h1:z5Pr6Wse6QJcQvpgxTxzMAevFarH0N37TG88Y9dprx0=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 h1:sBEjpZlNHzK1voKq9695PJSX2o5NEXl7/OL3coiIY0c=
@@ -545,7 +547,6 @@ golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c/go.mod h1:h1NjWce9XRLGQEsW7w
 golang.org/x/sys v0.0.0-20210330210617-4fbd30eecc44/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20210510120138-977fb7262007/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
-golang.org/x/sys v0.0.0-20210616094352-59db8d763f22/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
 golang.org/x/sys v0.5.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
