@@ -1,0 +1,22 @@
+name: team-coordination
+loop: false
+description: >
+  Team coordination scenario. The developer agent reviews code, sends a summary
+  message to the lead agent, and completes. Tests role-based task assignment,
+  tool chaining (code_review → message_send), and inter-agent messaging.
+steps:
+  - content: "Starting code review for the assigned task."
+    tool_calls:
+      - name: code_review
+        arguments:
+          path: "."
+  - content: "Code review complete. Found 2 minor issues. Sending summary to lead."
+    tool_calls:
+      - name: message_send
+        arguments:
+          to: "lead-agent"
+          subject: "Code review complete"
+          content: "Code review finished. Found 2 minor style issues in handler functions. No blocking problems — ready to proceed."
+  - content: >
+      Team coordination complete. Reviewed codebase and reported findings to lead.
+      2 minor issues identified, none blocking. Task complete.
