@@ -41,7 +41,7 @@ func New() *RatchetPlugin {
 				Description: "Ratchet autonomous agent orchestration plugin",
 				ModuleTypes: []string{"agent.provider", "ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server"},
 				StepTypes:   []string{"step.agent_execute", "step.provider_test", "step.provider_models", "step.workspace_init", "step.container_control", "step.secret_manage", "step.vault_config", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact", "step.human_request_resolve"},
-				WiringHooks: []string{"agent.provider_registry", "ratchet.sse_route_registration", "ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.human_request_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
+				WiringHooks: []string{"agent.provider_registry", "ratchet.sse_route_registration", "ratchet.mcp_server_route_registration", "ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.human_request_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
 			},
 		},
 	}
@@ -98,6 +98,7 @@ func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 	return []plugin.WiringHook{
 		agentplugin.ProviderRegistryHook(),
 		sseRouteRegistrationHook(),
+		mcpServerRouteHook(),
 		dbInitHook(),
 		authTokenHook(),
 		secretsGuardHook(),

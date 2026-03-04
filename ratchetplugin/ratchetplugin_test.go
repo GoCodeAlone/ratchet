@@ -1044,13 +1044,14 @@ func TestPlugin_WiringHooks(t *testing.T) {
 	p := New()
 	hooks := p.WiringHooks()
 
-	if len(hooks) != 18 {
-		t.Fatalf("expected 18 wiring hooks, got %d", len(hooks))
+	if len(hooks) != 19 {
+		t.Fatalf("expected 19 wiring hooks, got %d", len(hooks))
 	}
 
 	expectedNames := map[string]bool{
-		"agent.provider_registry":        false,
-		"ratchet.sse_route_registration": false,
+		"agent.provider_registry":               false,
+		"ratchet.sse_route_registration":        false,
+		"ratchet.mcp_server_route_registration": false,
 		"ratchet.db_init":                false,
 		"ratchet.auth_token":             false,
 		"ratchet.secrets_guard":          false,
