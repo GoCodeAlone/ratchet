@@ -1,0 +1,27 @@
+name: human-request
+loop: false
+description: >
+  Human-in-the-loop scenario. The agent requests clarification from the human
+  operator (blocking), waits for the human to respond, then saves the response
+  to memory and completes. Tests the request_human blocking flow and
+  /api/requests resolve endpoint.
+steps:
+  - content: "I need clarification before proceeding. Requesting input from the human operator."
+    tool_calls:
+      - name: request_human
+        arguments:
+          request_type: info
+          title: "Clarification needed for task requirements"
+          description: "Need to confirm the target environment before starting deployment. Please specify: staging or production?"
+          urgency: normal
+          blocking: true
+  - content: "Received clarification from operator. Saving the response to memory for future reference."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Human operator confirmed: use staging environment for this deployment. Production requires separate approval."
+          category: "fact"
+  - content: >
+      Human-in-the-loop complete. Requested operator input (blocking), received
+      clarification, and saved to memory. Ready to proceed with task using
+      confirmed environment settings.
