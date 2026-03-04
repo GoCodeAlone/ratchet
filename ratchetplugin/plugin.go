@@ -9,9 +9,9 @@ import (
 	"strings"
 
 	"github.com/CrisisTextLine/modular"
-	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
 	"github.com/GoCodeAlone/ratchet/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
+	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
 	"github.com/GoCodeAlone/workflow/capability"
 	"github.com/GoCodeAlone/workflow/config"
 	"github.com/GoCodeAlone/workflow/module"
@@ -374,6 +374,11 @@ func toolRegistryHook() plugin.WiringHook {
 					registry.Register(&tools.BrowserFillTool{Manager: bm})
 				}
 			}
+
+			// Development tools
+			registry.Register(&tools.CodeReviewTool{})
+			registry.Register(&tools.CodeComplexityTool{})
+			registry.Register(&tools.CodeDiffReviewTool{})
 
 			// Register k8s operations tools (shell out to kubectl)
 			registry.Register(&tools.K8sGetPodsTool{})

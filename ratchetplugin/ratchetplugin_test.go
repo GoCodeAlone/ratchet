@@ -988,9 +988,10 @@ func TestPlugin_ModuleFactories(t *testing.T) {
 	p := New()
 	factories := p.ModuleFactories()
 
-	// ratchet.ai_provider has been removed; it is now provided by workflow-plugin-agent
-	// as "agent.provider". Only ratchet-specific module types remain here.
+	// agent.provider is included here as ratchetplugin absorbs workflow-plugin-agent
+	// to avoid duplicate step type registration.
 	expected := []string{
+		"agent.provider",
 		"ratchet.sse_hub",
 		"ratchet.scheduler",
 		"ratchet.mcp_client",
@@ -1011,11 +1012,12 @@ func TestPlugin_StepFactories(t *testing.T) {
 	p := New()
 	factories := p.StepFactories()
 
-	// step.provider_test and step.provider_models have been removed from ratchetplugin;
-	// they are now provided by workflow-plugin-agent. step.agent_execute remains here
-	// as ratchet's richer override (browser, sub-agent, skill injection, etc.).
+	// step.provider_test and step.provider_models are delegated to the agent plugin's
+	// factories since ratchetplugin absorbs the agent plugin to avoid duplicate step
+	// type registration. step.agent_execute remains here as ratchet's richer override.
 	expected := []string{
-		"step.agent_execute", "step.workspace_init", "step.container_control",
+		"step.agent_execute", "step.provider_test", "step.provider_models",
+		"step.workspace_init", "step.container_control",
 		"step.secret_manage", "step.vault_config",
 		"step.mcp_reload", "step.oauth_exchange",
 		"step.approval_resolve", "step.webhook_process", "step.security_audit",
@@ -1035,11 +1037,12 @@ func TestPlugin_WiringHooks(t *testing.T) {
 	p := New()
 	hooks := p.WiringHooks()
 
-	if len(hooks) != 17 {
-		t.Fatalf("expected 17 wiring hooks, got %d", len(hooks))
+	if len(hooks) != 18 {
+		t.Fatalf("expected 18 wiring hooks, got %d", len(hooks))
 	}
 
 	expectedNames := map[string]bool{
+		"agent.provider_registry":        false,
 		"ratchet.sse_route_registration": false,
 		"ratchet.db_init":                false,
 		"ratchet.auth_token":             false,
