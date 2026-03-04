@@ -148,7 +148,7 @@ info "Approving via POST /api/approvals/$APPROVAL_ID/approve..."
 APPROVE_RESP=$(curl -sf -X POST "$RATCHET_URL/api/approvals/$APPROVAL_ID/approve" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"reviewer_comment":"LGTM — deployment approved for production"}' \
+    -d '{"comment":"LGTM — deployment approved for production"}' \
     | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','') or 'ok')" 2>/dev/null)
 pass "Approval submitted (response: $APPROVE_RESP)"
 
