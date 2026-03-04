@@ -10,6 +10,7 @@
 FROM --platform=$BUILDPLATFORM node:22-alpine AS ui-builder
 
 ARG NPM_TOKEN
+ARG GITHUB_TOKEN
 WORKDIR /build/ui
 
 COPY ui/package.json ui/package-lock.json ui/.npmrc ./
@@ -36,6 +37,7 @@ ARG TARGETOS TARGETARCH
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
+ARG GITHUB_TOKEN
 
 # GoCodeAlone modules are private; bypass proxy/sumdb.
 ENV GOPRIVATE=github.com/GoCodeAlone/* \
@@ -44,6 +46,11 @@ ENV GOPRIVATE=github.com/GoCodeAlone/* \
 RUN apk add --no-cache git ca-certificates
 
 WORKDIR /build
+
+# Configure git to use GitHub token for private repos
+RUN if [ -n "$GITHUB_TOKEN" ]; then \
+      git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \
+    fi
 
 # Cache dependency downloads
 COPY go.mod go.sum ./
