@@ -2,14 +2,14 @@
 # E2E Tool Policy Enforcement Test
 #
 # Tests that the ToolPolicyEngine correctly enforces access control.
-# The policy engine defaults to deny-all. We add an explicit allow for
-# file_read but not for shell_exec. The agent attempts both — shell_exec
-# is denied, file_read succeeds.
+# The policy engine defaults to allow-all. We add an explicit deny for
+# shell_exec. The agent attempts both — shell_exec is denied by the
+# explicit deny policy, file_read succeeds (allowed by default).
 #
 # What this does:
 #   1. Builds ratchetd
 #   2. Starts server with the tool-policy scenario (scripted test provider)
-#   3. Authenticates and creates an allow policy for file_read
+#   3. Authenticates and creates a deny policy for shell_exec
 #   4. Creates a task (shell_exec → file_read) for the development agent
 #   5. Waits for agent-tick to execute the task
 #   6. Verifies shell_exec and file_read both appear in transcripts
@@ -84,18 +84,18 @@ if [ -z "$TOKEN" ]; then
 fi
 pass "Authenticated with ratchet"
 
-# ---- Create allow policy for file_read ----
-# The policy engine defaults to deny-all. file_read needs an explicit allow.
-# shell_exec will remain denied by the default policy.
-info "Creating allow policy for file_read..."
+# ---- Create deny policy for shell_exec ----
+# The policy engine defaults to allow-all (default_policy: allow in modules.yaml).
+# We create an explicit deny for shell_exec. file_read remains allowed by default.
+info "Creating deny policy for shell_exec..."
 POLICY_RESP=$(curl -sf -X POST "$RATCHET_URL/api/tool-policies" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{"tool_pattern": "file_read", "action": "allow", "scope": "global"}')
+    -d '{"tool_pattern": "shell_exec", "action": "deny", "scope": "global"}')
 
 POLICY_ID=$(echo "$POLICY_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
 if [ -n "$POLICY_ID" ]; then
-    pass "Created allow policy for file_read: $POLICY_ID"
+    pass "Created deny policy for shell_exec: $POLICY_ID"
 else
     fail "Could not create tool policy"
     exit 1
@@ -186,14 +186,14 @@ print(f'Tools invoked: {sorted(tool_calls_found)}')
 
 echo "$TRANSCRIPTS"
 
-# shell_exec should appear (agent attempted it) — it will be denied by default policy
+# shell_exec should appear (agent attempted it) — it will be denied by explicit deny policy
 if echo "$TRANSCRIPTS" | grep -q "shell_exec"; then
     pass "shell_exec was attempted (as expected)"
 else
     fail "shell_exec was NOT attempted"
 fi
 
-# file_read should appear and succeed (explicit allow policy)
+# file_read should appear and succeed (allowed by default policy)
 if echo "$TRANSCRIPTS" | grep -q "file_read"; then
     pass "file_read was called (allowed by policy)"
 else
