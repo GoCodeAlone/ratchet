@@ -380,6 +380,42 @@ func toolRegistryHook() plugin.WiringHook {
 			registry.Register(&tools.CodeComplexityTool{})
 			registry.Register(&tools.CodeDiffReviewTool{})
 
+			// Security tools
+			registry.Register(&tools.VulnCheckTool{})
+			if db != nil {
+				registry.Register(&tools.SecurityScanTool{
+					RunAudit: func(ctx context.Context) (map[string]any, error) {
+						auditor := NewSecurityAuditor(db, app)
+						report := auditor.RunAll(ctx)
+						findings := make([]map[string]any, 0, len(report.Findings))
+						for _, f := range report.Findings {
+							findings = append(findings, map[string]any{
+								"check":       f.Check,
+								"severity":    string(f.Severity),
+								"title":       f.Title,
+								"description": f.Description,
+								"remediation": f.Remediation,
+							})
+						}
+						summary := map[string]int{}
+						for sev, count := range report.Summary {
+							summary[string(sev)] = count
+						}
+						passedCount := 12 - len(report.Findings)
+						if passedCount < 0 {
+							passedCount = 0
+						}
+						return map[string]any{
+							"score":        report.Score,
+							"summary":      summary,
+							"findings":     findings,
+							"passed_count": passedCount,
+							"failed_count": len(report.Findings),
+						}, nil
+					},
+				})
+			}
+
 			// Register k8s operations tools (shell out to kubectl)
 			registry.Register(&tools.K8sGetPodsTool{})
 			registry.Register(&tools.K8sGetEventsTool{})
