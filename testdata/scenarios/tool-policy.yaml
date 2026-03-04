@@ -1,0 +1,22 @@
+name: tool-policy
+loop: false
+description: >
+  Tool policy enforcement scenario. The agent attempts shell_exec (which
+  will be denied by the policy engine) then file_read (which is allowed
+  by an explicit allow policy). Tests that the ToolPolicyEngine correctly
+  enforces access control before tools are executed.
+steps:
+  - content: "I'll start by running a shell command to check system info."
+    tool_calls:
+      - name: shell_exec
+        arguments:
+          command: "echo hello"
+  - content: "Shell command was denied by policy. Falling back to reading a safe file instead."
+    tool_calls:
+      - name: file_read
+        arguments:
+          path: "go.mod"
+  - content: >
+      Tool policy test complete. shell_exec was denied by access policy
+      as expected. file_read succeeded with the explicit allow policy.
+      Policy enforcement is working correctly.
