@@ -367,6 +367,17 @@ func toolRegistryHook() plugin.WiringHook {
 				}
 			}
 
+			// Register k8s operations tools (shell out to kubectl)
+			registry.Register(&tools.K8sGetPodsTool{})
+			registry.Register(&tools.K8sGetEventsTool{})
+			registry.Register(&tools.K8sGetLogsTool{})
+			registry.Register(&tools.K8sDescribeTool{})
+			registry.Register(&tools.K8sRestartPodTool{})
+			registry.Register(&tools.K8sScaleTool{})
+			registry.Register(&tools.K8sRollbackTool{})
+			registry.Register(&tools.K8sApplyTool{})
+			registry.Register(&tools.InfraHealthCheckTool{})
+
 			// Register in service registry
 			_ = app.RegisterService("ratchet-tool-registry", registry)
 			return nil
