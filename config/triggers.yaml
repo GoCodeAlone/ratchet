@@ -7,3 +7,6 @@ triggers:
       - cron: "* * * * *"
         workflow: "pipeline:agent-tick"
         action: "tick"
+      - cron: "*/5 * * * *"
+        workflow: "pipeline:infra-monitor"
+        action: "health-check"

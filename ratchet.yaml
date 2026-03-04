@@ -40,4 +40,5 @@ imports:
   - config/routes-projects.yaml
   - config/routes-system.yaml
   - config/pipelines.yaml
+  - config/pipelines-infra.yaml
   - config/triggers.yaml
