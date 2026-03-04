@@ -2,13 +2,10 @@ package ratchetplugin
 
 import (
 	"context"
-	"fmt"
 	"sync"
-	"time"
 
 	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/ratchet/provider"
-	"github.com/GoCodeAlone/workflow/plugin"
 )
 
 // AgentSeed holds the definition of an agent to seed into the database.
@@ -74,137 +71,6 @@ func (m *AIProviderModule) Agents() []AgentSeed { return m.agents }
 
 // TestHTTPSource returns the HTTPSource if the provider is a test provider in HTTP mode.
 func (m *AIProviderModule) TestHTTPSource() *HTTPSource { return m.httpSource }
-
-// newAIProviderFactory returns a plugin.ModuleFactory for "ratchet.ai_provider".
-func newAIProviderFactory() plugin.ModuleFactory {
-	return func(name string, cfg map[string]any) modular.Module {
-		providerType, _ := cfg["provider"].(string)
-		if providerType == "" {
-			providerType = "mock"
-		}
-		model, _ := cfg["model"].(string)
-		_ = model // used when constructing real providers
-
-		// Build AI provider
-		var p provider.Provider
-		var httpSource *HTTPSource // non-nil when test provider uses HTTP mode
-		switch providerType {
-		case "mock":
-			var responses []string
-			if raw, ok := cfg["responses"]; ok {
-				if list, ok := raw.([]any); ok {
-					for _, item := range list {
-						if s, ok := item.(string); ok {
-							responses = append(responses, s)
-						}
-					}
-				}
-			}
-			if len(responses) == 0 {
-				responses = []string{"I have completed the task."}
-			}
-			p = &mockProvider{responses: responses}
-		case "test":
-			testMode, _ := cfg["test_mode"].(string)
-			if testMode == "" {
-				testMode = "scripted"
-			}
-			var source ResponseSource
-			switch testMode {
-			case "scripted":
-				var steps []ScriptedStep
-				// Try loading from scenario_file first
-				if scenarioFile, ok := cfg["scenario_file"].(string); ok && scenarioFile != "" {
-					scenario, err := LoadScenario(scenarioFile)
-					if err != nil {
-						p = &mockProvider{responses: []string{fmt.Sprintf("Failed to load scenario: %v", err)}}
-						break
-					}
-					source = NewScriptedSourceFromScenario(scenario)
-				} else {
-					// Parse inline steps from config
-					if raw, ok := cfg["steps"]; ok {
-						if list, ok := raw.([]any); ok {
-							for _, item := range list {
-								if m, ok := item.(map[string]any); ok {
-									step := ScriptedStep{}
-									step.Content, _ = m["content"].(string)
-									step.Error, _ = m["error"].(string)
-									// Parse tool_calls from config
-									if tcRaw, ok := m["tool_calls"]; ok {
-										if tcList, ok := tcRaw.([]any); ok {
-											for _, tcItem := range tcList {
-												if tcMap, ok := tcItem.(map[string]any); ok {
-													tc := provider.ToolCall{}
-													tc.ID, _ = tcMap["id"].(string)
-													tc.Name, _ = tcMap["name"].(string)
-													if args, ok := tcMap["arguments"].(map[string]any); ok {
-														tc.Arguments = args
-													}
-													step.ToolCalls = append(step.ToolCalls, tc)
-												}
-											}
-										}
-									}
-									steps = append(steps, step)
-								}
-							}
-						}
-					}
-					if len(steps) == 0 {
-						steps = []ScriptedStep{{Content: "Test provider: no steps configured."}}
-					}
-					loop := false
-					if v, ok := cfg["loop"].(bool); ok {
-						loop = v
-					}
-					source = NewScriptedSource(steps, loop)
-				}
-			case "channel":
-				// Channel mode — source is created but channels are only useful in-process
-				channelSource, _, _ := NewChannelSource()
-				source = channelSource
-			case "http":
-				httpSource = NewHTTPSource(nil) // SSE hub wired later via wiring hook
-				source = httpSource
-			default:
-				p = &mockProvider{responses: []string{fmt.Sprintf("Unknown test_mode %q", testMode)}}
-			}
-			if source != nil {
-				var opts []TestProviderOption
-				if timeoutStr, ok := cfg["timeout"].(string); ok && timeoutStr != "" {
-					if d, err := time.ParseDuration(timeoutStr); err == nil {
-						opts = append(opts, WithTimeout(d))
-					}
-				}
-				p = NewTestProvider(source, opts...)
-			}
-		default:
-			// Unknown provider type — surface the error at Init time instead of silently
-			// degrading to a mock, which would hide misconfiguration in production.
-			p = &errProvider{err: fmt.Errorf("ratchet.ai_provider %q: unrecognized provider type %q (supported: mock, test)", name, providerType)}
-		}
-
-		// Parse agent seeds
-		var agents []AgentSeed
-		if raw, ok := cfg["agents"]; ok {
-			if list, ok := raw.([]any); ok {
-				for _, item := range list {
-					if m, ok := item.(map[string]any); ok {
-						agents = append(agents, extractAgentSeed(m))
-					}
-				}
-			}
-		}
-
-		return &AIProviderModule{
-			name:       name,
-			provider:   p,
-			agents:     agents,
-			httpSource: httpSource,
-		}
-	}
-}
 
 // mockProvider is a simple scripted AI provider for testing and demos.
 type mockProvider struct {

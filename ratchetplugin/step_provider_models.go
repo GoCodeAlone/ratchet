@@ -4,17 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/ratchet/provider"
 	"github.com/GoCodeAlone/workflow/module"
-	"github.com/GoCodeAlone/workflow/plugin"
 )
 
 // ProviderModelsStep fetches available models from a provider's API.
 // Requires provider type and API key in the request body.
 type ProviderModelsStep struct {
 	name string
-	app  modular.Application
 }
 
 func (s *ProviderModelsStep) Name() string { return s.name }
@@ -66,11 +63,3 @@ func (s *ProviderModelsStep) Execute(ctx context.Context, pc *module.PipelineCon
 	}, nil
 }
 
-func newProviderModelsFactory() plugin.StepFactory {
-	return func(name string, _ map[string]any, app modular.Application) (any, error) {
-		return &ProviderModelsStep{
-			name: name,
-			app:  app,
-		}, nil
-	}
-}

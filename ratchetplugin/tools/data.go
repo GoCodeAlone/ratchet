@@ -54,7 +54,7 @@ func (t *DBAnalyzeTool) Execute(_ context.Context, args map[string]any) (any, er
 	if err != nil {
 		return map[string]any{"error": fmt.Sprintf("explain failed: %v", err)}, nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	planLines := []string{}
 	fullScan := false
@@ -133,7 +133,7 @@ func (t *DBHealthCheckTool) Execute(_ context.Context, _ map[string]any) (any, e
 				tableNames = append(tableNames, name)
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 	}
 	tables := []map[string]any{}
 	for _, name := range tableNames {

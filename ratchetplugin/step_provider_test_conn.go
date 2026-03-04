@@ -6,7 +6,6 @@ import (
 
 	"github.com/CrisisTextLine/modular"
 	"github.com/GoCodeAlone/workflow/module"
-	"github.com/GoCodeAlone/workflow/plugin"
 )
 
 // ProviderTestStep tests connectivity to a configured AI provider.
@@ -78,15 +77,3 @@ func (s *ProviderTestStep) Execute(ctx context.Context, pc *module.PipelineConte
 	}, nil
 }
 
-// newProviderTestFactory returns a plugin.StepFactory for "step.provider_test".
-func newProviderTestFactory() plugin.StepFactory {
-	return func(name string, cfg map[string]any, app modular.Application) (any, error) {
-		aliasExpr, _ := cfg["alias"].(string)
-		return &ProviderTestStep{
-			name:      name,
-			aliasExpr: aliasExpr,
-			app:       app,
-			tmpl:      module.NewTemplateEngine(),
-		}, nil
-	}
-}

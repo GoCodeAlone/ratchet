@@ -333,10 +333,10 @@ func (t *CodeDiffReviewTool) Execute(ctx context.Context, args map[string]any) (
 		if len(parts) >= 3 {
 			added, removed := 0, 0
 			if parts[0] != "-" {
-				fmt.Sscanf(parts[0], "%d", &added)
+				_, _ = fmt.Sscanf(parts[0], "%d", &added)
 			}
 			if parts[1] != "-" {
-				fmt.Sscanf(parts[1], "%d", &removed)
+				_, _ = fmt.Sscanf(parts[1], "%d", &removed)
 			}
 			files = append(files, map[string]any{
 				"path":    parts[2],

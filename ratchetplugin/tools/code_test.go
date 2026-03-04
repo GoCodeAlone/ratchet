@@ -79,7 +79,7 @@ func TestCodeReviewTool_Execute_InvalidPath(t *testing.T) {
 	}
 	m, ok := result.(map[string]any)
 	if ok {
-		if _, hasErr := m["error"]; hasErr {
+		if _, ok := m["error"]; ok {
 			return
 		}
 	}
