@@ -1,0 +1,25 @@
+name: browser-qa
+loop: false
+description: >
+  Browser QA scenario. The agent navigates to a local test page, extracts
+  heading elements, takes a screenshot, and completes. Tests the browser
+  tool chain: browser_navigate → browser_extract → browser_screenshot.
+steps:
+  - content: "Navigating to the local test page for QA verification."
+    tool_calls:
+      - name: browser_navigate
+        arguments:
+          url: "http://localhost:18888/testdata/test-page.html"
+  - content: "Page loaded. Extracting heading elements for content verification."
+    tool_calls:
+      - name: browser_extract
+        arguments:
+          selector: "h1"
+  - content: "Content extracted. Taking a screenshot to capture visual state."
+    tool_calls:
+      - name: browser_screenshot
+        arguments: {}
+  - content: >
+      Browser QA complete. Navigated to test page, extracted heading
+      'Ratchet Browser QA Test', and captured screenshot. All browser
+      tools verified successfully.
