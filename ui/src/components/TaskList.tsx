@@ -222,9 +222,11 @@ function TranscriptMessage({ entry }: { entry: TranscriptEntry }) {
   );
 }
 
-function TaskDetail({ task, onClose }: { task: Task; onClose: () => void }) {
+function TaskDetail({ task: initialTask, onClose }: { task: Task; onClose: () => void }) {
   const { agents } = useAgentStore();
-  const { updateTask } = useTaskStore();
+  const { tasks: storeTasks, updateTask } = useTaskStore();
+  // Keep task in sync with store so status transitions reflect immediately
+  const task = storeTasks.find((t) => t.id === initialTask.id) ?? initialTask;
   const [updating, setUpdating] = useState(false);
   const [transcripts, setTranscripts] = useState<TranscriptEntry[]>([]);
   const [loadingTranscripts, setLoadingTranscripts] = useState(false);
@@ -693,6 +695,9 @@ export default function TaskList({ initialFilter }: { initialFilter?: NavFilter 
     return true;
   });
 
+  // Always derive selected task from store so detail panel reflects store updates (e.g. status transitions)
+  const selectedTask = selected ? (tasks.find((t) => t.id === selected.id) ?? selected) : null;
+
   return (
     <div style={{ maxWidth: '1100px' }}>
       {/* Filters */}
@@ -759,9 +764,9 @@ export default function TaskList({ initialFilter }: { initialFilter?: NavFilter 
       </div>
 
       {/* Task detail */}
-      {selected && (
+      {selectedTask && (
         <TaskDetail
-          task={selected}
+          task={selectedTask}
           onClose={() => setSelected(null)}
         />
       )}

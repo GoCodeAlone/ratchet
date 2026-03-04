@@ -39,9 +39,9 @@ func New() *RatchetPlugin {
 				Version:     "1.0.0",
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
-				ModuleTypes: []string{"ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.workspace_init", "step.container_control", "step.secret_manage", "step.vault_config", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact", "step.human_request_resolve"},
-				WiringHooks: []string{"ratchet.sse_route_registration", "ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.human_request_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
+				ModuleTypes: []string{"agent.provider", "ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server"},
+				StepTypes:   []string{"step.agent_execute", "step.provider_test", "step.provider_models", "step.workspace_init", "step.container_control", "step.secret_manage", "step.vault_config", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact", "step.human_request_resolve"},
+				WiringHooks: []string{"agent.provider_registry", "ratchet.sse_route_registration", "ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.human_request_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
 			},
 		},
 	}
@@ -53,10 +53,12 @@ func (p *RatchetPlugin) Capabilities() []capability.Contract {
 }
 
 // ModuleFactories returns the module factories registered by this plugin.
-// Note: "agent.provider" is now provided by the workflow-plugin-agent plugin;
-// ratchet.ai_provider has been removed in favour of that generic module type.
+// "agent.provider" is registered here so ratchetplugin is self-contained and
+// does not need workflow-plugin-agent loaded as a separate engine plugin
+// (which would cause a duplicate step.agent_execute conflict).
 func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 	return map[string]plugin.ModuleFactory{
+		"agent.provider":             agentplugin.NewProviderModuleFactory(),
 		"ratchet.sse_hub":            newSSEHubFactory(),
 		"ratchet.scheduler":          newSchedulerFactory(),
 		"ratchet.mcp_client":         newMCPClientFactory(),
@@ -66,12 +68,15 @@ func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 }
 
 // StepFactories returns the pipeline step factories registered by this plugin.
-// step.agent_execute overrides the generic version from workflow-plugin-agent with
-// ratchet's richer implementation (browser, sub-agent, skill injection, etc.).
-// step.provider_test and step.provider_models are now provided by the agent plugin.
+// step.agent_execute uses ratchet's richer implementation (browser, sub-agent,
+// skill injection, etc.). step.provider_test and step.provider_models are
+// delegated to the agent plugin's factories since ratchetplugin absorbs the
+// agent plugin to avoid duplicate step registration.
 func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 	return map[string]plugin.StepFactory{
 		"step.agent_execute":         newAgentExecuteStepFactory(),
+		"step.provider_test":         agentplugin.NewProviderTestFactory(),
+		"step.provider_models":       agentplugin.NewProviderModelsFactory(),
 		"step.workspace_init":        newWorkspaceInitFactory(),
 		"step.container_control":     newContainerControlFactory(),
 		"step.secret_manage":         newSecretManageFactory(),
@@ -87,8 +92,11 @@ func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 }
 
 // WiringHooks returns the post-init wiring hooks for this plugin.
+// agentplugin.ProviderRegistryHook() is included here because ratchetplugin
+// absorbs the workflow-plugin-agent to avoid duplicate step type registration.
 func (p *RatchetPlugin) WiringHooks() []plugin.WiringHook {
 	return []plugin.WiringHook{
+		agentplugin.ProviderRegistryHook(),
 		sseRouteRegistrationHook(),
 		dbInitHook(),
 		authTokenHook(),

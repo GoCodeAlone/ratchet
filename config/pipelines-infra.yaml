@@ -33,8 +33,10 @@ pipelines:
           database: ratchet-db
           query: >
             SELECT COUNT(*) as busy FROM tasks
-            WHERE assigned_to = '{{ step "find-infra-agent" "row" "id" }}'
+            WHERE assigned_to = ?
             AND status = 'in_progress'
+          params:
+            - '{{ step "find-infra-agent" "row" "id" }}'
           mode: single
 
       - name: check-not-busy
@@ -58,10 +60,12 @@ pipelines:
               'Run a complete infrastructure health check. Observe all pod statuses, detect anomalies, and remediate any issues found. Record findings in memory. Report a structured summary at the end.',
               'pending',
               5,
-              '{{ step "find-infra-agent" "row" "id" }}',
-              datetime(''now''),
-              datetime(''now'')
+              ?,
+              datetime('now'),
+              datetime('now')
             )
+          params:
+            - '{{ step "find-infra-agent" "row" "id" }}'
 
       - name: execute-infra-agent
         type: step.agent_execute

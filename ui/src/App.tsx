@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import LoginPage from './components/LoginPage';
 import Layout from './components/Layout';
@@ -19,5 +20,11 @@ export default function App() {
   }
 
   if (!isAuthenticated) return <LoginPage />;
+
+  // After login, redirect away from /login to the dashboard
+  if (window.location.pathname === '/login') {
+    return <Navigate to="/" replace />;
+  }
+
   return <Layout key={token || ''} />;
 }

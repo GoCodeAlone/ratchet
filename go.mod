@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/CrisisTextLine/modular v1.11.11
 	github.com/GoCodeAlone/workflow v0.3.11
-	github.com/GoCodeAlone/workflow-plugin-agent v0.1.0
+	github.com/GoCodeAlone/workflow-plugin-agent v0.1.1
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/go-rod/rod v0.116.2
 	github.com/google/uuid v1.6.0
@@ -212,3 +212,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace github.com/GoCodeAlone/workflow-plugin-agent => /Users/jon/workspace/workflow-plugin-agent
