@@ -1,0 +1,40 @@
+name: self-healing-rollback
+loop: false
+description: >
+  Agent detects a CrashLoopBackOff/ImagePullBackOff pod, rolls back the deployment
+  to the previous working revision, and verifies health is restored.
+  Requires: a deployment named "infra-test-app" in the "default" namespace
+  that has been updated to a broken image (creating revision 2).
+  The rollback restores revision 1 (the known-good image).
+
+steps:
+  # Turn 1: Agent runs cluster-wide health check
+  - content: "Running infrastructure health check to assess overall cluster state."
+    tool_calls:
+      - name: infra_health_check
+        arguments: {}
+
+  # Turn 2: Agent identifies the broken deployment and initiates rollback
+  - content: >
+      Health check detected an unhealthy pod in the infra-test-app deployment.
+      The pod is failing to start properly. I will roll back the deployment
+      to the previous known-good revision to restore service.
+    tool_calls:
+      - name: k8s_rollback
+        arguments:
+          deployment: "infra-test-app"
+          namespace: "default"
+
+  # Turn 3: Agent verifies the fix took effect
+  - content: "Rollback initiated. Verifying pod health after rollback."
+    tool_calls:
+      - name: k8s_get_pods
+        arguments:
+          namespace: "default"
+          selector: "app=infra-test-app"
+
+  # Turn 4: Final summary — no tool_calls exits the agent loop
+  - content: >
+      Remediation complete. The infra-test-app deployment was rolled back from the
+      failing revision to the previous stable revision. Pod is now running normally.
+      Health score restored. Incident recorded for future reference.

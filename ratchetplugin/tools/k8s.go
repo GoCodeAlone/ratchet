@@ -683,7 +683,8 @@ func (t *InfraHealthCheckTool) Execute(ctx context.Context, args map[string]any)
 					state, _ := cMap["state"].(map[string]any)
 					if waiting, ok := state["waiting"].(map[string]any); ok {
 						reason, _ := waiting["reason"].(string)
-						if reason == "CrashLoopBackOff" || reason == "OOMKilled" || reason == "Error" {
+						if reason == "CrashLoopBackOff" || reason == "OOMKilled" || reason == "Error" ||
+						reason == "ImagePullBackOff" || reason == "ErrImagePull" || reason == "CreateContainerConfigError" {
 							unhealthyPods++
 							issues = append(issues, issueRecord{
 								Pod:       podName,

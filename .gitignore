@@ -1,5 +1,7 @@
 bin/
 ratchetd
+ratchetd-linux
+dist/
 data/
 *.db
 *.db-shm

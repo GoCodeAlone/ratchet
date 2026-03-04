@@ -42,7 +42,7 @@ pipelines:
       - name: check-not-busy
         type: step.conditional
         config:
-          field: "{{ step \"check-active-agent\" \"row\" \"busy\" | default \"0\" }}"
+          field: "steps.check-active-agent.row.busy"
           routes:
             "0": create-health-check-task
           default: agent-busy
@@ -67,6 +67,21 @@ pipelines:
           params:
             - '{{ step "find-infra-agent" "row" "id" }}'
 
+      # Populate Current with agent data for step.agent_execute
+      # (intermediate steps overwrite the "row" key, so we restore it here)
+      - name: prepare-agent-context
+        type: step.set
+        config:
+          values:
+            agent_id: '{{ step "find-infra-agent" "row" "id" }}'
+            agent_name: '{{ step "find-infra-agent" "row" "name" }}'
+            system_prompt: '{{ step "find-infra-agent" "row" "system_prompt" }}'
+            task: >
+              Run a complete infrastructure health check using the self-healing-infrastructure skill.
+              Observe all pod statuses across all namespaces, detect anomalies, and remediate any
+              issues found using the approved remediation playbooks. Record all findings and actions
+              in memory. End with a structured health report.
+
       - name: execute-infra-agent
         type: step.agent_execute
         config:
@@ -76,13 +91,22 @@ pipelines:
           loop_detection:
             max_consecutive: 3
             max_errors: 2
-        input:
-          agent_id: '{{ step "find-infra-agent" "row" "id" }}'
-          task: >
-            Run a complete infrastructure health check using the self-healing-infrastructure skill.
-            Observe all pod statuses across all namespaces, detect anomalies, and remediate any
-            issues found using the approved remediation playbooks. Record all findings and actions
-            in memory. End with a structured health report.
+
+      - name: mark-task-done
+        type: step.db_exec
+        config:
+          database: ratchet-db
+          query: >
+            UPDATE tasks SET status = 'completed',
+            result = ?,
+            completed_at = datetime('now'),
+            updated_at = datetime('now')
+            WHERE assigned_to = ?
+            AND title = 'Infrastructure Health Check'
+            AND status = 'pending'
+          params:
+            - '{{ step "execute-infra-agent" "result" | default "completed" }}'
+            - '{{ step "find-infra-agent" "row" "id" }}'
 
       - name: log-infra-result
         type: step.log

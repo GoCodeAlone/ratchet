@@ -32,6 +32,16 @@ modules:
           required: false
           default: "./data/ratchet.db"
           desc: "SQLite database file path"
+        ai_provider:
+          env: RATCHET_AI_PROVIDER
+          required: false
+          default: "mock"
+          desc: "AI provider type: mock, test, anthropic, openai"
+        ai_scenario_file:
+          env: RATCHET_AI_SCENARIO
+          required: false
+          default: ""
+          desc: "Path to scripted scenario YAML (used when ai_provider=test)"
 
   # --- HTTP server ---
   - name: ratchet-server
@@ -104,13 +114,16 @@ modules:
     type: api.command
     dependsOn: [ratchet-router]
 
-  # --- AI provider (mock for development; swap provider: anthropic for production) ---
-  # For interactive QA testing, set provider: test, test_mode: http, timeout: 300
+  # --- AI provider (configurable via RATCHET_AI_PROVIDER env var) ---
+  # Default: mock (dev). Set RATCHET_AI_PROVIDER=test + RATCHET_AI_SCENARIO for scripted E2E.
+  # Set RATCHET_AI_PROVIDER=anthropic for production.
   # Uses the generic agent.provider module type from workflow-plugin-agent.
   - name: ratchet-ai
     type: agent.provider
     config:
-      provider: mock
+      provider: '{{config "ai_provider"}}'
+      scenario_file: '{{config "ai_scenario_file"}}'
+      test_mode: scripted
       responses:
         - "Task acknowledged. Analyzing the problem..."
         - "I've identified the key issues. Here's my approach..."
@@ -142,6 +155,20 @@ modules:
           model: ""
           team_id: alpha
           is_lead: false
+        - id: infrawatch
+          name: InfraWatch
+          role: infrastructure
+          system_prompt: "You are an autonomous infrastructure monitoring agent. Observe pod health across all namespaces, detect anomalies (CrashLoopBackOff, OOMKilled, ImagePullBackOff, high restart counts), remediate issues using available k8s tools, and learn from outcomes."
+          provider: ""
+          model: ""
+          team_id: ""
+          is_lead: false
+
+  # --- Tool policy engine (default: allow for development; set deny + explicit policies for production) ---
+  - name: ratchet-tool-policy
+    type: ratchet.tool_policy_engine
+    config:
+      default_policy: allow
 
   # --- SSE hub (real-time Server-Sent Events for the UI) ---
   - name: ratchet-sse
