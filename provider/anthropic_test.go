@@ -350,6 +350,7 @@ func TestAnthropicStreamWithToolCall(t *testing.T) {
 
 	if toolEvent == nil {
 		t.Fatal("expected tool_call event")
+		return
 	}
 	if toolEvent.Tool.ID != "toolu_123" {
 		t.Errorf("expected tool ID toolu_123, got %s", toolEvent.Tool.ID)

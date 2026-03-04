@@ -384,6 +384,7 @@ func TestCopilotStreamWithToolCall(t *testing.T) {
 
 	if toolEvent == nil {
 		t.Fatal("expected tool_call event")
+		return
 	}
 	if toolEvent.Tool.ID != "call_123" {
 		t.Errorf("expected tool ID call_123, got %s", toolEvent.Tool.ID)
@@ -750,6 +751,7 @@ func TestCopilotStreamInvalidToolArgsJSON(t *testing.T) {
 
 	if errEvent == nil {
 		t.Fatal("expected error event for invalid tool arguments JSON")
+		return
 	}
 	if !contains(errEvent.Error, "do_thing") {
 		t.Errorf("expected error to mention tool name, got: %s", errEvent.Error)

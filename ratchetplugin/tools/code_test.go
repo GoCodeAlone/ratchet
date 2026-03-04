@@ -77,11 +77,8 @@ func TestCodeReviewTool_Execute_InvalidPath(t *testing.T) {
 	if err != nil {
 		return
 	}
-	m, ok := result.(map[string]any)
-	if ok {
-		if _, ok := m["error"]; ok {
-			return
-		}
+	if m, ok := result.(map[string]any); ok && m["error"] != nil {
+		return
 	}
 }
 
