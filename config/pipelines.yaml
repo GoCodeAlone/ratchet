@@ -28,6 +28,7 @@ pipelines:
             UPDATE tasks SET assigned_to = (
               SELECT a.id FROM agents a WHERE a.status = 'active'
               AND a.id NOT IN (SELECT assigned_to FROM tasks WHERE status = 'in_progress' AND assigned_to != '')
+              AND (tasks.task_role = '' OR a.role = tasks.task_role)
               ORDER BY RANDOM() LIMIT 1
             ), updated_at = datetime('now')
             WHERE status = 'pending' AND (assigned_to = '' OR assigned_to IS NULL)
