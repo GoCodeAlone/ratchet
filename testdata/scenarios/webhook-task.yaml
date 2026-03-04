@@ -1,0 +1,21 @@
+name: webhook-task
+loop: false
+description: >
+  Webhook-triggered code review scenario. An inbound GitHub push event
+  creates a task. The agent reviews the code, saves findings to memory,
+  and completes. Tests the full webhook → task → agent execution pipeline.
+steps:
+  - content: "Webhook push event received. Reviewing the code changes in the repository."
+    tool_calls:
+      - name: code_review
+        arguments:
+          path: "."
+  - content: "Code review complete. Saving findings to memory for tracking."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Webhook-triggered review: GitHub push event reviewed. Code looks good — no critical issues found."
+          category: "fact"
+  - content: >
+      Webhook task complete. Reviewed code changes from GitHub push event,
+      found no critical issues, and saved findings to memory.
