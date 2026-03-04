@@ -76,4 +76,3 @@ func (s *ProviderTestStep) Execute(ctx context.Context, pc *module.PipelineConte
 		},
 	}, nil
 }
-
