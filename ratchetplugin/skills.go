@@ -295,6 +295,9 @@ func skillManagerHook() plugin.WiringHook {
 			}
 
 			skillDir := "skills"
+			if envDir := os.Getenv("RATCHET_SKILLS_DIR"); envDir != "" {
+				skillDir = envDir
+			}
 			sm := NewSkillManager(db, skillDir)
 
 			if err := sm.InitTables(); err != nil {

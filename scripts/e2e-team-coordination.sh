@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # E2E Team Coordination Test
 #
-# Tests role-based task assignment and inter-agent messaging.
+# Tests role-based task assignment, inter-agent messaging, and skill assignment.
 #
 # What this does:
 #   1. Builds ratchetd
 #   2. Starts server with team-coordination scenario (developer agent scripted)
+#      and RATCHET_SKILLS_DIR=testdata/skills to load the test skill
 #   3. Authenticates and finds the developer agent (role=developer)
-#   4. Creates a task with task_role=developer
-#   5. Waits for agent-tick to assign the task to the developer and execute it
-#   6. Verifies transcripts contain: code_review → message_send tool chain
-#   7. Verifies a message appears in /api/messages
+#   4. Lists skills via GET /api/skills and verifies test-skill loaded
+#   5. Assigns test-skill to the developer agent via POST /api/agents/{id}/skills
+#   6. Creates a task with task_role=developer
+#   7. Waits for agent-tick to assign the task to the developer and execute it
+#   8. Verifies transcripts contain: code_review → message_send tool chain
+#   9. Verifies a message appears in /api/messages
 #
 # Usage:
 #   ./scripts/e2e-team-coordination.sh
@@ -65,6 +68,7 @@ rm -f "$DB_PATH"
 RATCHET_AI_PROVIDER=test \
 RATCHET_AI_SCENARIO="testdata/scenarios/team-coordination.yaml" \
 RATCHET_DB_PATH="$DB_PATH" \
+RATCHET_SKILLS_DIR="testdata/skills" \
 ./bin/ratchetd --config "$TEMP_CONFIG" > /tmp/ratchetd-e2e-team.log 2>&1 &
 RATCHET_PID=$!
 sleep 3
@@ -96,6 +100,55 @@ if [ -z "$AGENT_ID" ]; then
     exit 1
 fi
 pass "Found developer agent: $AGENT_ID"
+
+# ---- Verify skill loaded and assign to developer agent ----
+info "Listing skills via /api/skills..."
+SKILL_ID=$(curl -sf "$RATCHET_URL/api/skills" -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+skills = json.load(sys.stdin)
+skills = skills if isinstance(skills, list) else []
+for s in skills:
+    if s.get('id') == 'test-skill':
+        print(s['id'])
+        break
+" 2>/dev/null)
+
+if [ -n "$SKILL_ID" ]; then
+    pass "Found test-skill in /api/skills"
+else
+    fail "test-skill not found in /api/skills — check RATCHET_SKILLS_DIR loading"
+    SKILL_ID="test-skill"  # continue anyway for partial test
+fi
+
+info "Assigning test-skill to developer agent..."
+ASSIGN_RESP=$(curl -sf -X POST "$RATCHET_URL/api/agents/$AGENT_ID/skills" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{\"skill_id\":\"$SKILL_ID\"}")
+
+ASSIGNED=$(echo "$ASSIGN_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('assigned', False))" 2>/dev/null)
+if [ "$ASSIGNED" = "True" ] || [ "$ASSIGNED" = "true" ]; then
+    pass "Skill $SKILL_ID assigned to developer agent"
+else
+    fail "Failed to assign skill: $ASSIGN_RESP"
+fi
+
+info "Verifying skill assignment via /api/agents/$AGENT_ID/skills..."
+AGENT_SKILL=$(curl -sf "$RATCHET_URL/api/agents/$AGENT_ID/skills" -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+skills = json.load(sys.stdin)
+skills = skills if isinstance(skills, list) else []
+for s in skills:
+    if s.get('id') == 'test-skill':
+        print(s['id'])
+        break
+" 2>/dev/null)
+
+if [ "$AGENT_SKILL" = "test-skill" ]; then
+    pass "Skill confirmed in /api/agents/$AGENT_ID/skills"
+else
+    fail "Skill not found in agent skills"
+fi
 
 # ---- Create task with task_role=developer ----
 info "Creating task with task_role=developer..."
