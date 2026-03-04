@@ -416,6 +416,12 @@ func toolRegistryHook() plugin.WiringHook {
 				})
 			}
 
+			// Data tools
+			if db != nil {
+				registry.Register(&tools.DBAnalyzeTool{DB: db})
+				registry.Register(&tools.DBHealthCheckTool{DB: db})
+			}
+
 			// Register k8s operations tools (shell out to kubectl)
 			registry.Register(&tools.K8sGetPodsTool{})
 			registry.Register(&tools.K8sGetEventsTool{})
