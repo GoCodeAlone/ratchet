@@ -1,0 +1,35 @@
+name: security-scan
+loop: false
+description: >
+  Security agent runs platform audit and vulnerability check, consults memory
+  for past vulnerabilities, and saves findings.
+steps:
+  - content: "Running platform security audit to assess overall security posture."
+    tool_calls:
+      - name: security_scan
+        arguments: {}
+  - content: "Audit complete. Now checking for dependency vulnerabilities."
+    tool_calls:
+      - name: vuln_check
+        arguments:
+          module_path: "."
+  - content: "Checking memory for previously identified vulnerabilities."
+    tool_calls:
+      - name: memory_search
+        arguments:
+          query: "security vulnerability CVE audit finding"
+          limit: 5
+  - content: "Saving current findings for future tracking."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Security scan results: Platform score 85/100. Found 1 high-severity finding (default credentials), 2 medium findings (CORS, rate limiting). No dependency CVEs detected. Remediation priority: address default credentials first."
+          category: "fact"
+  - content: >
+      Security Scan Summary:
+      - Platform security score: 85/100
+      - High severity: 1 (default credentials detected)
+      - Medium severity: 2 (wildcard CORS, no rate limiting)
+      - Dependency vulnerabilities: 0
+      - No previous findings in memory (first scan)
+      - Priority: Address default credentials immediately

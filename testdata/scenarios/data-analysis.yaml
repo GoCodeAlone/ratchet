@@ -1,0 +1,34 @@
+name: data-analysis
+loop: false
+description: >
+  Data agent checks database health, analyzes query performance, consults memory
+  for past optimization recommendations, and saves new findings.
+steps:
+  - content: "Running database health check to assess overall database status."
+    tool_calls:
+      - name: db_health_check
+        arguments: {}
+  - content: "Database integrity OK. Analyzing query performance for common queries."
+    tool_calls:
+      - name: db_analyze
+        arguments:
+          query: "SELECT * FROM tasks WHERE status = 'pending' AND assigned_to != '' ORDER BY priority DESC"
+  - content: "Checking memory for past optimization recommendations."
+    tool_calls:
+      - name: memory_search
+        arguments:
+          query: "database optimization index query performance"
+          limit: 5
+  - content: "Found a full table scan on tasks. Saving optimization recommendation."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Database optimization: tasks table query for pending assigned tasks performs a full table scan. Recommend adding index: CREATE INDEX idx_tasks_status_assigned ON tasks(status, assigned_to). Estimated improvement: eliminate full scan on frequently-run agent-tick query."
+          category: "fact"
+  - content: >
+      Database Health Summary:
+      - Integrity: OK
+      - Full table scan detected on tasks query (status + assigned_to filter)
+      - Recommendation: Add composite index on tasks(status, assigned_to)
+      - No previous optimization history (first analysis)
+      - Database size and free pages within normal range
