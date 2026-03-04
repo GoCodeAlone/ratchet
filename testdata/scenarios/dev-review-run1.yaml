@@ -1,0 +1,35 @@
+name: dev-review-run1-discovery
+loop: false
+description: >
+  First code review run. Agent reviews code, finds issues, searches memory (empty),
+  and saves new patterns. Demonstrates initial knowledge building.
+steps:
+  - content: "Running code review to analyze the codebase for quality issues."
+    tool_calls:
+      - name: code_review
+        arguments:
+          path: "."
+  - content: "Found 3 lint issues. Let me check if these are recurring patterns."
+    tool_calls:
+      - name: memory_search
+        arguments:
+          query: "code review findings lint complexity"
+          limit: 5
+  - content: "No previous patterns found — this is a fresh review. Running complexity analysis."
+    tool_calls:
+      - name: code_complexity
+        arguments:
+          path: "."
+          threshold: 10
+  - content: "Found high cyclomatic complexity in handler functions. Saving all findings to memory for future reference."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Code review finding: high cyclomatic complexity in HTTP handler functions (3 functions over threshold 10). Linter found unused variables and missing error checks. Pattern: handler functions accumulate complexity over time."
+          category: "fact"
+  - content: >
+      Code Review Summary (Run 1 - Discovery):
+      - 3 lint issues found (unused vars, missing error checks)
+      - 1 complexity hotspot (handler functions over threshold)
+      - 0 previous patterns in memory (fresh review)
+      - All findings saved to memory for future tracking

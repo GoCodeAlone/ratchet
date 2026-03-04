@@ -1,0 +1,35 @@
+name: dev-review-run2-recall
+loop: false
+description: >
+  Second code review run. Agent finds similar issues, recalls patterns from memory,
+  and produces a review referencing past findings. Demonstrates learning.
+steps:
+  - content: "Running code review to analyze the codebase for quality issues."
+    tool_calls:
+      - name: code_review
+        arguments:
+          path: "."
+  - content: "Found 2 lint issues similar to previous findings. Checking memory for recurring patterns."
+    tool_calls:
+      - name: memory_search
+        arguments:
+          query: "code review findings lint complexity handler"
+          limit: 5
+  - content: "Memory confirms this is a recurring pattern — high complexity in handler functions was found in a previous review. Running complexity analysis to compare."
+    tool_calls:
+      - name: code_complexity
+        arguments:
+          path: "."
+          threshold: 10
+  - content: "Reinforcing the pattern in memory with updated count."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Recurring pattern (seen 2x): high cyclomatic complexity in HTTP handler functions persists across reviews. Same lint issues (unused vars, missing error checks) found again. Recommend investigating automated linting in CI pipeline."
+          category: "fact"
+  - content: >
+      Code Review Summary (Run 2 - Recall):
+      - 2 lint issues found (recurring from previous review)
+      - High complexity in handler functions — RECURRING PATTERN (seen 2x)
+      - Memory recall: previous review identified same handler complexity pattern
+      - Recommendation: Consider adding golangci-lint to CI pipeline for automated detection

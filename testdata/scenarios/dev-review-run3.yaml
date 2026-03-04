@@ -1,0 +1,29 @@
+name: dev-review-run3-skip-known
+loop: false
+description: >
+  Third code review run. Agent recognizes well-known patterns from memory,
+  recommends automation instead of manual review. Saves a decision.
+steps:
+  - content: "Running code review to analyze the codebase."
+    tool_calls:
+      - name: code_review
+        arguments:
+          path: "."
+  - content: "Found similar lint issues. Checking memory — this might be a known pattern."
+    tool_calls:
+      - name: memory_search
+        arguments:
+          query: "recurring code review lint complexity handler automated"
+          limit: 5
+  - content: "Memory confirms this is a well-known recurring pattern (3x). Instead of reporting it again, I'm recording a decision to automate."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "DECISION: Automate golangci-lint checks in CI pipeline for handler complexity and lint issues. Pattern seen 3 times across reviews — manual review is no longer cost-effective for these known issues. Redirect review effort to architectural concerns instead."
+          category: "decision"
+  - content: >
+      Code Review Summary (Run 3 - Skip Known):
+      - Known recurring pattern detected (seen 3x): handler complexity + lint issues
+      - DECISION RECORDED: Automate golangci-lint in CI pipeline
+      - These findings no longer warrant manual review — automation recommended
+      - Future reviews should focus on architectural concerns, not known lint patterns
