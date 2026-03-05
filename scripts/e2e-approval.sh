@@ -53,10 +53,17 @@ go build -o bin/ratchetd ./cmd/ratchetd/
 pass "Build succeeded"
 
 # ---- Create fast-cron test config ----
-TEMP_TRIGGERS=$(mktemp /tmp/triggers-e2e-approval-XXXX.yaml)
-sed 's|\*/10 \* \* \* \*|* * * * *|g' config/triggers.yaml > "$TEMP_TRIGGERS"
+TEMP_TRIGGERS=$(mktemp ./triggers-e2e-approval-XXXX.yaml)
+cat > "$TEMP_TRIGGERS" <<'TRIGGERS'
+triggers:
+  schedule:
+    jobs:
+      - cron: "* * * * *"
+        workflow: "pipeline:agent-tick"
+        action: "tick"
+TRIGGERS
 
-TEMP_CONFIG=$(mktemp /tmp/ratchet-e2e-approval-XXXX.yaml)
+TEMP_CONFIG=$(mktemp ./ratchet-e2e-approval-XXXX.yaml)
 sed "s|config/triggers.yaml|$TEMP_TRIGGERS|g" ratchet.yaml > "$TEMP_CONFIG"
 
 # ---- Start server ----
@@ -98,6 +105,17 @@ if [ -z "$AGENT_ID" ]; then
     exit 1
 fi
 pass "Found reviewer agent: $AGENT_ID"
+
+# ---- Activate agent ----
+info "Activating agent $AGENT_ID..."
+ACTIVATE_RESP=$(curl -sf -X POST "$RATCHET_URL/api/agents/$AGENT_ID/start" \
+    -H "Authorization: Bearer $TOKEN")
+if echo "$ACTIVATE_RESP" | grep -q "active"; then
+    pass "Agent activated"
+else
+    fail "Could not activate agent: $ACTIVATE_RESP"
+    exit 1
+fi
 
 # ---- Create task ----
 info "Creating approval-flow task (task_role=reviewer)..."

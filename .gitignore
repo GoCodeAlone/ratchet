@@ -12,3 +12,7 @@ ui/dist/
 *.exe
 .playwright-cli/
 qa-screenshots/
+
+# E2E temp configs
+triggers-e2e-*.yaml
+ratchet-e2e-*.yaml

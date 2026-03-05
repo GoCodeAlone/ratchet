@@ -25,12 +25,6 @@ func (m *MCPServerModule) Name() string { return m.name }
 
 func (m *MCPServerModule) Init(app modular.Application) error {
 	m.app = app
-	// Get DB from service registry
-	if svc, ok := app.SvcRegistry()["ratchet-db"]; ok {
-		if dbp, ok := svc.(module.DBProvider); ok {
-			m.db = dbp.DB()
-		}
-	}
 	return app.RegisterService(m.name, m)
 }
 
@@ -46,8 +40,16 @@ func (m *MCPServerModule) RequiresServices() []modular.ServiceDependency {
 	}
 }
 
-func (m *MCPServerModule) Start(_ context.Context) error { return nil }
-func (m *MCPServerModule) Stop(_ context.Context) error  { return nil }
+func (m *MCPServerModule) Start(_ context.Context) error {
+	// Resolve DB in Start() — SQLiteStorage opens connection during Start, not Init
+	if svc, ok := m.app.SvcRegistry()["ratchet-db"]; ok {
+		if dbp, ok := svc.(module.DBProvider); ok {
+			m.db = dbp.DB()
+		}
+	}
+	return nil
+}
+func (m *MCPServerModule) Stop(_ context.Context) error { return nil }
 
 // Path returns the configured MCP endpoint path.
 func (m *MCPServerModule) Path() string { return m.path }

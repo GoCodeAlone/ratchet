@@ -32,7 +32,6 @@ NC='\033[0m'
 
 RESULT="PASSED"
 RATCHET_PID=""
-TEMP_CONFIG=""
 
 pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
 fail() { echo -e "${RED}[FAIL]${NC} $1"; RESULT="FAILED"; }
@@ -45,7 +44,7 @@ cleanup() {
         wait "$RATCHET_PID" 2>/dev/null || true
         RATCHET_PID=""
     fi
-    rm -f "$TEMP_CONFIG" "$DB_PATH" 2>/dev/null || true
+    rm -f "$DB_PATH" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -59,11 +58,8 @@ info "Starting ratchetd..."
 mkdir -p "$(dirname "$DB_PATH")"
 rm -f "$DB_PATH"
 
-TEMP_CONFIG=$(mktemp /tmp/ratchet-e2e-mcp-XXXX.yaml)
-cp ratchet.yaml "$TEMP_CONFIG"
-
 RATCHET_DB_PATH="$DB_PATH" \
-./bin/ratchetd --config "$TEMP_CONFIG" > /tmp/ratchetd-e2e-mcp.log 2>&1 &
+./bin/ratchetd --config ratchet.yaml > /tmp/ratchetd-e2e-mcp.log 2>&1 &
 RATCHET_PID=$!
 sleep 3
 

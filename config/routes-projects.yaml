@@ -324,12 +324,17 @@ workflows:
               config:
                 path_params: [id]
                 parse_body: true
+            - name: set-container-params
+              type: step.set
+              config:
+                values:
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
+                  image: "{{ default \"ubuntu:22.04\" (step \"parse-request\" \"body\" \"image\") }}"
+                  workspace_path: "/tmp/ratchet-workspaces/{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: start-container
               type: step.container_control
               config:
                 action: start
-                project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
-                image: "{{ default \"ubuntu:22.04\" (step \"parse-request\" \"body\" \"image\") }}"
             - name: respond
               type: step.json_response
               config:
@@ -349,11 +354,15 @@ workflows:
               type: step.request_parse
               config:
                 path_params: [id]
+            - name: set-stop-params
+              type: step.set
+              config:
+                values:
+                  project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: stop-container
               type: step.container_control
               config:
                 action: stop
-                project_id: "{{ step \"parse-request\" \"path_params\" \"id\" }}"
             - name: respond
               type: step.json_response
               config:

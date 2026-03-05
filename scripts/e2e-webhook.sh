@@ -53,10 +53,17 @@ go build -o bin/ratchetd ./cmd/ratchetd/
 pass "Build succeeded"
 
 # ---- Create fast-cron test config ----
-TEMP_TRIGGERS=$(mktemp /tmp/triggers-e2e-webhook-XXXX.yaml)
-sed 's|\*/10 \* \* \* \*|* * * * *|g' config/triggers.yaml > "$TEMP_TRIGGERS"
+TEMP_TRIGGERS=$(mktemp ./triggers-e2e-webhook-XXXX.yaml)
+cat > "$TEMP_TRIGGERS" <<'TRIGGERS'
+triggers:
+  schedule:
+    jobs:
+      - cron: "* * * * *"
+        workflow: "pipeline:agent-tick"
+        action: "tick"
+TRIGGERS
 
-TEMP_CONFIG=$(mktemp /tmp/ratchet-e2e-webhook-XXXX.yaml)
+TEMP_CONFIG=$(mktemp ./ratchet-e2e-webhook-XXXX.yaml)
 sed "s|config/triggers.yaml|$TEMP_TRIGGERS|g" ratchet.yaml > "$TEMP_CONFIG"
 
 # ---- Start server ----
@@ -82,6 +89,33 @@ if [ -z "$TOKEN" ]; then
     exit 1
 fi
 pass "Authenticated with ratchet"
+
+# ---- Find development agent ----
+AGENT_ID=$(curl -sf "$RATCHET_URL/api/agents" -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+agents = json.load(sys.stdin)
+for a in (agents if isinstance(agents, list) else []):
+    if a.get('role') == 'development' and a.get('status') != 'stopped':
+        print(a['id'])
+        break
+" 2>/dev/null)
+
+if [ -z "$AGENT_ID" ]; then
+    fail "No development agent found — check modules.yaml agent seeds"
+    exit 1
+fi
+pass "Found development agent: $AGENT_ID"
+
+# ---- Activate agent ----
+info "Activating agent $AGENT_ID..."
+ACTIVATE_RESP=$(curl -sf -X POST "$RATCHET_URL/api/agents/$AGENT_ID/start" \
+    -H "Authorization: Bearer $TOKEN")
+if echo "$ACTIVATE_RESP" | grep -q "active"; then
+    pass "Agent activated"
+else
+    fail "Could not activate agent: $ACTIVATE_RESP"
+    exit 1
+fi
 
 # ---- Create webhook config ----
 info "Creating GitHub push webhook..."
