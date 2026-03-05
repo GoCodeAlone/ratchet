@@ -42,6 +42,16 @@ modules:
           required: false
           default: ""
           desc: "Path to scripted scenario YAML (used when ai_provider=test)"
+        otel_endpoint:
+          env: RATCHET_OTEL_ENDPOINT
+          required: false
+          default: ""
+          desc: "OpenTelemetry collector endpoint (host:port)"
+        otel_enabled:
+          env: RATCHET_OTEL_ENABLED
+          required: false
+          default: "false"
+          desc: "Enable OpenTelemetry tracing"
 
   # --- HTTP server ---
   - name: ratchet-server
@@ -62,7 +72,7 @@ modules:
     config:
       allowedOrigins: ["*"]
       allowedMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-      allowedHeaders: ["Content-Type", "Authorization"]
+      allowedHeaders: ["Content-Type", "Authorization", "X-Workflow-Trace"]
     dependsOn: [ratchet-router]
 
   # --- Rate limiter ---
@@ -158,7 +168,7 @@ modules:
         - id: infrawatch
           name: InfraWatch
           role: infrastructure
-          system_prompt: "You are an autonomous infrastructure monitoring and self-healing agent. Observe pod health across all namespaces with infra_health_check, detect anomalies (CrashLoopBackOff, OOMKilled, ImagePullBackOff, high restart counts), monitor deployment rollouts with deployment_status, and check resource utilization with k8s_top to predict capacity issues. Remediate issues using k8s_rollback, k8s_restart_pod, and k8s_scale. Learn from outcomes via memory to refine detection."
+          system_prompt: "You are an autonomous infrastructure monitoring and self-healing agent. Before acting, search memory for prior findings about similar issues. Compare current observations against historical baselines to detect trends and predict emerging problems. Observe pod health across all namespaces with infra_health_check, detect anomalies (CrashLoopBackOff, OOMKilled, ImagePullBackOff, high restart counts), monitor deployment rollouts with deployment_status, and check resource utilization with k8s_top to predict capacity issues. Remediate issues using k8s_rollback, k8s_restart_pod, and k8s_scale. Learn from outcomes via memory to refine detection."
           provider: ""
           model: ""
           team_id: ""
@@ -166,7 +176,7 @@ modules:
         - id: devreview
           name: DevReview
           role: development
-          system_prompt: "You are an autonomous code review and technical debt agent. Analyze Go codebases for quality issues using code_review (golangci-lint), measure complexity with code_complexity, and review diffs with code_diff_review. Use git_log_stats to identify hotspot files that change frequently and test_coverage to find untested code. Correlate hotspots with complexity to prioritize refactoring. Track recurring patterns in memory and recommend automation for frequently-seen issues."
+          system_prompt: "You are an autonomous code review and technical debt agent. Before acting, search memory for prior findings about similar issues. Compare current observations against historical baselines to detect trends and predict emerging problems. Analyze Go codebases for quality issues using code_review (golangci-lint), measure complexity with code_complexity, and review diffs with code_diff_review. Use git_log_stats to identify hotspot files that change frequently and test_coverage to find untested code. Correlate hotspots with complexity to prioritize refactoring. Track recurring patterns in memory and recommend automation for frequently-seen issues."
           provider: ""
           model: ""
           team_id: ""
@@ -174,7 +184,7 @@ modules:
         - id: securityguard
           name: SecurityGuard
           role: security
-          system_prompt: "You are an autonomous security compliance agent. Run platform security audits with security_scan, generate compliance reports tagged to CIS/OWASP/SOC2 frameworks with compliance_report, scan for dependency vulnerabilities with vuln_check, and audit secrets for rotation needs with secret_audit. Track remediation status over time in memory and identify recurring vulnerabilities."
+          system_prompt: "You are an autonomous security compliance agent. Before acting, search memory for prior findings about similar issues. Compare current observations against historical baselines to detect trends and predict emerging problems. Run platform security audits with security_scan, generate compliance reports tagged to CIS/OWASP/SOC2 frameworks with compliance_report, scan for dependency vulnerabilities with vuln_check, and audit secrets for rotation needs with secret_audit. Track remediation status over time in memory and identify recurring vulnerabilities."
           provider: ""
           model: ""
           team_id: ""
@@ -182,11 +192,35 @@ modules:
         - id: dataanalyst
           name: DataAnalyst
           role: data
-          system_prompt: "You are an autonomous database health and data quality agent. Monitor database integrity with db_health_check, inspect schema structure for changes with schema_inspect, profile data quality (null rates, cardinality, distributions) with data_profile, and analyze query performance with db_analyze. Use memory to track which optimizations were effective and detect schema drift between runs."
+          system_prompt: "You are an autonomous database health and data quality agent. Before acting, search memory for prior findings about similar issues. Compare current observations against historical baselines to detect trends and predict emerging problems. Monitor database integrity with db_health_check, inspect schema structure for changes with schema_inspect, profile data quality (null rates, cardinality, distributions) with data_profile, and analyze query performance with db_analyze. Use memory to track which optimizations were effective and detect schema drift between runs."
           provider: ""
           model: ""
           team_id: ""
           is_lead: false
+
+  # --- RBAC via Casbin ---
+  - name: ratchet-authz
+    type: authz.casbin
+    config:
+      model: |
+        [request_definition]
+        r = sub, obj, act
+        [policy_definition]
+        p = sub, obj, act
+        [role_definition]
+        g = _, _
+        [policy_effect]
+        e = some(where (p.eft == allow))
+        [matchers]
+        m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && r.act == p.act
+      policies:
+        - ["admin", "/*", "*"]
+        - ["operator", "/api/agents/*", "GET"]
+        - ["operator", "/api/agents/*/start", "POST"]
+        - ["operator", "/api/agents/*/stop", "POST"]
+        - ["operator", "/api/tasks/*", "*"]
+        - ["operator", "/api/projects/*", "*"]
+        - ["viewer", "/api/*", "GET"]
 
   # --- Tool policy engine (default: allow for development; set deny + explicit policies for production) ---
   - name: ratchet-tool-policy
@@ -225,3 +259,21 @@ modules:
       cacheMaxAge: 0
       router: ratchet-router
     dependsOn: [ratchet-router]
+
+  # --- Observability ---
+  - name: ratchet-metrics
+    type: metrics.collector
+    config:
+      path: "/metrics"
+
+  - name: ratchet-health
+    type: health.checker
+    config:
+      liveness_path: "/healthz"
+      readiness_path: "/readyz"
+
+  - name: ratchet-otel
+    type: observability.otel
+    config:
+      endpoint: '{{config "otel_endpoint"}}'
+      serviceName: "ratchet"
