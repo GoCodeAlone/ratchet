@@ -42,16 +42,6 @@ modules:
           required: false
           default: ""
           desc: "Path to scripted scenario YAML (used when ai_provider=test)"
-        otel_endpoint:
-          env: RATCHET_OTEL_ENDPOINT
-          required: false
-          default: ""
-          desc: "OpenTelemetry collector endpoint (host:port)"
-        otel_enabled:
-          env: RATCHET_OTEL_ENABLED
-          required: false
-          default: "false"
-          desc: "Enable OpenTelemetry tracing"
 
   # --- HTTP server ---
   - name: ratchet-server
@@ -198,30 +188,6 @@ modules:
           team_id: ""
           is_lead: false
 
-  # --- RBAC via Casbin ---
-  - name: ratchet-authz
-    type: authz.casbin
-    config:
-      model: |
-        [request_definition]
-        r = sub, obj, act
-        [policy_definition]
-        p = sub, obj, act
-        [role_definition]
-        g = _, _
-        [policy_effect]
-        e = some(where (p.eft == allow))
-        [matchers]
-        m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && r.act == p.act
-      policies:
-        - ["admin", "/*", "*"]
-        - ["operator", "/api/agents/*", "GET"]
-        - ["operator", "/api/agents/*/start", "POST"]
-        - ["operator", "/api/agents/*/stop", "POST"]
-        - ["operator", "/api/tasks/*", "*"]
-        - ["operator", "/api/projects/*", "*"]
-        - ["viewer", "/api/*", "GET"]
-
   # --- Tool policy engine (default: allow for development; set deny + explicit policies for production) ---
   - name: ratchet-tool-policy
     type: ratchet.tool_policy_engine
@@ -259,21 +225,3 @@ modules:
       cacheMaxAge: 0
       router: ratchet-router
     dependsOn: [ratchet-router]
-
-  # --- Observability ---
-  - name: ratchet-metrics
-    type: metrics.collector
-    config:
-      path: "/metrics"
-
-  - name: ratchet-health
-    type: health.checker
-    config:
-      liveness_path: "/healthz"
-      readiness_path: "/readyz"
-
-  - name: ratchet-otel
-    type: observability.otel
-    config:
-      endpoint: '{{config "otel_endpoint"}}'
-      serviceName: "ratchet"
