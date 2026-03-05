@@ -1,0 +1,38 @@
+name: dev-expanded
+loop: false
+description: >
+  Development agent runs expanded analysis with git stats and coverage.
+  Uses code_review, git_log_stats, test_coverage, code_complexity, and memory_save.
+steps:
+  - content: "Running code review on the codebase."
+    tool_calls:
+      - name: code_review
+        arguments:
+          path: "."
+  - content: "Analyzing git history for change hotspots."
+    tool_calls:
+      - name: git_log_stats
+        arguments:
+          repo_path: "."
+          days: 90
+          limit: 10
+  - content: "Running test coverage analysis."
+    tool_calls:
+      - name: test_coverage
+        arguments:
+          path: "."
+  - content: "Checking code complexity."
+    tool_calls:
+      - name: code_complexity
+        arguments:
+          path: "."
+          threshold: 10
+  - content: "Saving expanded analysis findings."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Dev expanded: 3 lint issues, handler.go top hotspot (15 changes/90d), 72% coverage, 2 high-complexity functions. Priority: test uncovered hotspots."
+          category: "fact"
+  - content: >
+      Development analysis complete. Key findings: handler.go is the highest-risk file
+      (frequent changes + high complexity + low coverage). Recommend adding tests and refactoring.

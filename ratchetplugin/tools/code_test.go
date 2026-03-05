@@ -200,3 +200,157 @@ func gitRun(t *testing.T, dir string, args ...string) {
 		t.Fatalf("git %v failed: %s: %v", args, out, err)
 	}
 }
+
+// ---------- GitLogStatsTool ----------
+
+func TestGitLogStatsTool_Name(t *testing.T) {
+	tool := &GitLogStatsTool{}
+	if tool.Name() != "git_log_stats" {
+		t.Fatalf("expected name git_log_stats, got %s", tool.Name())
+	}
+}
+
+func TestGitLogStatsTool_Execute(t *testing.T) {
+	// Use the existing setupGitRepo helper which creates a repo with one commit.
+	dir := setupGitRepo(t)
+
+	// Configure git identity for subsequent commits in this test.
+	gitRun(t, dir, "config", "user.email", "test@test.com")
+	gitRun(t, dir, "config", "user.name", "TestAuthor")
+
+	// Add a second file and commit so there is meaningful log history.
+	err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0644)
+	if err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	gitRun(t, dir, "add", "main.go")
+	// Set author env so the author name is deterministic.
+	cmd := exec.Command("git", "commit", "-m", "add main.go")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=TestAuthor",
+		"GIT_AUTHOR_EMAIL=test@test.com",
+		"GIT_COMMITTER_NAME=TestAuthor",
+		"GIT_COMMITTER_EMAIL=test@test.com",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git commit: %v\n%s", err, out)
+	}
+
+	tool := &GitLogStatsTool{}
+	result, execErr := tool.Execute(context.Background(), map[string]any{
+		"repo_path": dir,
+		"days":      float64(365),
+		"limit":     float64(10),
+	})
+	if execErr != nil {
+		t.Fatalf("unexpected error: %v", execErr)
+	}
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map result, got %T", result)
+	}
+
+	// Verify top-level keys exist.
+	if _, ok := m["total_commits"]; !ok {
+		t.Error("expected 'total_commits' key in result")
+	}
+	if _, ok := m["hotspots"]; !ok {
+		t.Error("expected 'hotspots' key in result")
+	}
+	if _, ok := m["contributors"]; !ok {
+		t.Error("expected 'contributors' key in result")
+	}
+
+	totalCommits, ok := m["total_commits"].(int)
+	if !ok {
+		t.Fatalf("expected total_commits to be int, got %T", m["total_commits"])
+	}
+	if totalCommits < 1 {
+		t.Errorf("expected at least 1 commit, got %d", totalCommits)
+	}
+
+	// Verify hotspots have the expected structure.
+	hotspots, ok := m["hotspots"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected hotspots to be []map[string]any, got %T", m["hotspots"])
+	}
+	if len(hotspots) == 0 {
+		t.Error("expected at least one hotspot entry")
+	}
+	for _, h := range hotspots {
+		if _, ok := h["file"]; !ok {
+			t.Error("hotspot entry missing 'file' key")
+		}
+		if _, ok := h["changes"]; !ok {
+			t.Error("hotspot entry missing 'changes' key")
+		}
+	}
+
+	// Verify contributors have the expected structure.
+	contributors, ok := m["contributors"].([]map[string]any)
+	if !ok {
+		t.Fatalf("expected contributors to be []map[string]any, got %T", m["contributors"])
+	}
+	if len(contributors) == 0 {
+		t.Error("expected at least one contributor entry")
+	}
+	for _, c := range contributors {
+		if _, ok := c["name"]; !ok {
+			t.Error("contributor entry missing 'name' key")
+		}
+		if _, ok := c["commits"]; !ok {
+			t.Error("contributor entry missing 'commits' key")
+		}
+	}
+}
+
+func TestGitLogStatsTool_Execute_MissingPath(t *testing.T) {
+	tool := &GitLogStatsTool{}
+	_, err := tool.Execute(context.Background(), map[string]any{})
+	if err == nil {
+		t.Fatal("expected error for missing repo_path")
+	}
+}
+
+func TestGitLogStatsTool_Execute_NotARepo(t *testing.T) {
+	// A plain temp dir that is not a git repo.
+	dir := t.TempDir()
+
+	tool := &GitLogStatsTool{}
+	result, err := tool.Execute(context.Background(), map[string]any{
+		"repo_path": dir,
+	})
+	// The tool swallows git errors and returns empty slices, so err may be nil.
+	if err != nil {
+		// An error return is also acceptable.
+		return
+	}
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map result, got %T", result)
+	}
+	// total_commits should be 0 for a non-repo directory.
+	totalCommits, _ := m["total_commits"].(int)
+	if totalCommits != 0 {
+		t.Errorf("expected 0 commits for non-repo dir, got %d", totalCommits)
+	}
+}
+
+// ---------- TestCoverageTool ----------
+
+func TestTestCoverageTool_Name(t *testing.T) {
+	tool := &TestCoverageTool{}
+	if tool.Name() != "test_coverage" {
+		t.Fatalf("expected name test_coverage, got %s", tool.Name())
+	}
+}
+
+func TestTestCoverageTool_Execute_MissingPath(t *testing.T) {
+	tool := &TestCoverageTool{}
+	_, err := tool.Execute(context.Background(), map[string]any{})
+	if err == nil {
+		t.Fatal("expected error for missing path")
+	}
+}

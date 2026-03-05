@@ -1,0 +1,34 @@
+name: security-expanded
+loop: false
+description: >
+  Security agent runs expanded audit with compliance report and secret audit.
+  Uses security_scan, compliance_report, vuln_check, secret_audit, and memory_save.
+steps:
+  - content: "Running platform security audit."
+    tool_calls:
+      - name: security_scan
+        arguments: {}
+  - content: "Generating compliance report."
+    tool_calls:
+      - name: compliance_report
+        arguments:
+          framework: "all"
+  - content: "Checking for dependency vulnerabilities."
+    tool_calls:
+      - name: vuln_check
+        arguments:
+          module_path: "."
+  - content: "Auditing secrets for rotation needs."
+    tool_calls:
+      - name: secret_audit
+        arguments:
+          max_age_days: 90
+  - content: "Saving security assessment."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Security expanded: platform score 85, CIS 80% OWASP 78% SOC2 75%, 0 CVEs, 2 secrets need rotation. Priority: rotate aged secrets."
+          category: "fact"
+  - content: >
+      Security assessment complete. Platform score 85/100. Compliance gaps in TLS and default credentials.
+      No CVEs. Two secrets past rotation threshold.

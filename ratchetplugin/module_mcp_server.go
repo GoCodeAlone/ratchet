@@ -185,6 +185,90 @@ func (m *MCPServerModule) toolsList() map[string]any {
 				"required": []string{"id"},
 			},
 		},
+		{
+			"name": "ratchet_git_log_stats", "description": "Analyze git history for file change frequency and contributor activity",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"repo_path": map[string]any{"type": "string"},
+					"days":      map[string]any{"type": "integer"},
+					"limit":     map[string]any{"type": "integer"},
+				},
+				"required": []string{"repo_path"},
+			},
+		},
+		{
+			"name": "ratchet_test_coverage", "description": "Analyze Go test coverage per package",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path":     map[string]any{"type": "string"},
+					"packages": map[string]any{"type": "string"},
+				},
+				"required": []string{"path"},
+			},
+		},
+		{
+			"name": "ratchet_deployment_status", "description": "Check Kubernetes deployment rollout status",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"deployment": map[string]any{"type": "string"},
+					"namespace":  map[string]any{"type": "string"},
+				},
+				"required": []string{"deployment"},
+			},
+		},
+		{
+			"name": "ratchet_k8s_top", "description": "Get resource usage (CPU/memory) for pods or nodes",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"resource":  map[string]any{"type": "string"},
+					"namespace": map[string]any{"type": "string"},
+					"selector":  map[string]any{"type": "string"},
+				},
+				"required": []string{"resource"},
+			},
+		},
+		{
+			"name": "ratchet_compliance_report", "description": "Generate compliance report tagged to CIS/OWASP/SOC2 frameworks",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"framework": map[string]any{"type": "string"},
+				},
+			},
+		},
+		{
+			"name": "ratchet_secret_audit", "description": "Audit secrets for age, rotation needs, and unused entries",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"max_age_days": map[string]any{"type": "integer"},
+				},
+			},
+		},
+		{
+			"name": "ratchet_schema_inspect", "description": "Inspect database schema structure, columns, indexes, and foreign keys",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"table": map[string]any{"type": "string"},
+				},
+			},
+		},
+		{
+			"name": "ratchet_data_profile", "description": "Profile data quality: null rates, cardinality, min/max, distributions",
+			"inputSchema": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"table":       map[string]any{"type": "string"},
+					"sample_size": map[string]any{"type": "integer"},
+				},
+				"required": []string{"table"},
+			},
+		},
 	}
 	return map[string]any{"tools": tools}
 }

@@ -380,47 +380,52 @@ func toolRegistryHook() plugin.WiringHook {
 			registry.Register(&tools.CodeReviewTool{})
 			registry.Register(&tools.CodeComplexityTool{})
 			registry.Register(&tools.CodeDiffReviewTool{})
+			registry.Register(&tools.GitLogStatsTool{})
+			registry.Register(&tools.TestCoverageTool{})
 
 			// Security tools
 			registry.Register(&tools.VulnCheckTool{})
 			if db != nil {
-				registry.Register(&tools.SecurityScanTool{
-					RunAudit: func(ctx context.Context) (map[string]any, error) {
-						auditor := NewSecurityAuditor(db, app)
-						report := auditor.RunAll(ctx)
-						findings := make([]map[string]any, 0, len(report.Findings))
-						for _, f := range report.Findings {
-							findings = append(findings, map[string]any{
-								"check":       f.Check,
-								"severity":    string(f.Severity),
-								"title":       f.Title,
-								"description": f.Description,
-								"remediation": f.Remediation,
-							})
-						}
-						summary := map[string]int{}
-						for sev, count := range report.Summary {
-							summary[string(sev)] = count
-						}
-						passedCount := 12 - len(report.Findings)
-						if passedCount < 0 {
-							passedCount = 0
-						}
-						return map[string]any{
-							"score":        report.Score,
-							"summary":      summary,
-							"findings":     findings,
-							"passed_count": passedCount,
-							"failed_count": len(report.Findings),
-						}, nil
-					},
-				})
+				runAudit := func(ctx context.Context) (map[string]any, error) {
+					auditor := NewSecurityAuditor(db, app)
+					report := auditor.RunAll(ctx)
+					findings := make([]map[string]any, 0, len(report.Findings))
+					for _, f := range report.Findings {
+						findings = append(findings, map[string]any{
+							"check":       f.Check,
+							"severity":    string(f.Severity),
+							"title":       f.Title,
+							"description": f.Description,
+							"remediation": f.Remediation,
+						})
+					}
+					summary := map[string]int{}
+					for sev, count := range report.Summary {
+						summary[string(sev)] = count
+					}
+					passedCount := 12 - len(report.Findings)
+					if passedCount < 0 {
+						passedCount = 0
+					}
+					return map[string]any{
+						"score":        report.Score,
+						"summary":      summary,
+						"findings":     findings,
+						"passed_count": passedCount,
+						"failed_count": len(report.Findings),
+					}, nil
+				}
+				registry.Register(&tools.SecurityScanTool{RunAudit: runAudit})
+				registry.Register(&tools.ComplianceReportTool{RunAudit: runAudit})
+				registry.Register(&tools.SecretAuditTool{DB: db})
 			}
 
 			// Data tools
 			if db != nil {
 				registry.Register(&tools.DBAnalyzeTool{DB: db})
 				registry.Register(&tools.DBHealthCheckTool{DB: db})
+				registry.Register(&tools.SchemaInspectTool{DB: db})
+				registry.Register(&tools.DataProfileTool{DB: db})
 			}
 
 			// Register k8s operations tools (shell out to kubectl)
@@ -433,6 +438,8 @@ func toolRegistryHook() plugin.WiringHook {
 			registry.Register(&tools.K8sRollbackTool{})
 			registry.Register(&tools.K8sApplyTool{})
 			registry.Register(&tools.InfraHealthCheckTool{})
+			registry.Register(&tools.DeploymentStatusTool{})
+			registry.Register(&tools.K8sTopTool{})
 
 			// Register in service registry
 			_ = app.RegisterService("ratchet-tool-registry", registry)

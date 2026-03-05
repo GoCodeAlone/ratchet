@@ -692,8 +692,8 @@ func TestMCPServer_ToolsList(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected tools to be a list, got %T", toolsRaw)
 	}
-	if len(toolsList) != 9 {
-		t.Errorf("expected 9 tools, got %d", len(toolsList))
+	if len(toolsList) != 17 {
+		t.Errorf("expected 17 tools, got %d", len(toolsList))
 	}
 }
 

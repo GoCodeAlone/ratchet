@@ -744,3 +744,227 @@ func (t *InfraHealthCheckTool) Execute(ctx context.Context, args map[string]any)
 		"issues":         issues,
 	}, nil
 }
+
+// ---- DeploymentStatusTool ---------------------------------------------------
+
+// DeploymentStatusTool returns a structured rollout status for a Kubernetes Deployment.
+type DeploymentStatusTool struct{}
+
+func (t *DeploymentStatusTool) Name() string { return "deployment_status" }
+func (t *DeploymentStatusTool) Description() string {
+	return "Get rollout status, replica counts, image, and conditions for a Kubernetes Deployment"
+}
+func (t *DeploymentStatusTool) Definition() provider.ToolDef {
+	return provider.ToolDef{
+		Name:        "deployment_status",
+		Description: "Fetch detailed rollout status for a Kubernetes Deployment: replica counts (desired/ready/updated/available/unavailable), current image, rollout revision, strategy, conditions, and whether the rollout is complete.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"deployment": map[string]any{"type": "string", "description": "Deployment name"},
+				"namespace":  map[string]any{"type": "string", "description": "Namespace (default: default)"},
+			},
+			"required": []string{"deployment"},
+		},
+	}
+}
+func (t *DeploymentStatusTool) Execute(ctx context.Context, args map[string]any) (any, error) {
+	deployment, _ := args["deployment"].(string)
+	if deployment == "" {
+		return nil, fmt.Errorf("deployment is required")
+	}
+	ns := "default"
+	if v, ok := args["namespace"].(string); ok && v != "" {
+		ns = v
+	}
+
+	result, stderr, exitCode, err := kubectlJSON(ctx, "get", "deployment", deployment, "-n", ns)
+	if err != nil {
+		return nil, err
+	}
+	if exitCode != 0 {
+		return map[string]any{"error": stderr, "exit_code": exitCode}, nil
+	}
+
+	// Extract fields from the JSON response
+	meta, _ := result["metadata"].(map[string]any)
+	spec, _ := result["spec"].(map[string]any)
+	status, _ := result["status"].(map[string]any)
+
+	annotations, _ := meta["annotations"].(map[string]any)
+	revision, _ := annotations["deployment.kubernetes.io/revision"].(string)
+
+	desiredReplicas := intFromJSON(spec["replicas"])
+	readyReplicas := intFromJSON(status["readyReplicas"])
+	updatedReplicas := intFromJSON(status["updatedReplicas"])
+	availableReplicas := intFromJSON(status["availableReplicas"])
+	unavailableReplicas := intFromJSON(status["unavailableReplicas"])
+
+	strategy := ""
+	if strategyMap, ok := spec["strategy"].(map[string]any); ok {
+		strategy, _ = strategyMap["type"].(string)
+	}
+
+	image := ""
+	if tmpl, ok := spec["template"].(map[string]any); ok {
+		if tSpec, ok := tmpl["spec"].(map[string]any); ok {
+			if containers, ok := tSpec["containers"].([]any); ok && len(containers) > 0 {
+				if c, ok := containers[0].(map[string]any); ok {
+					image, _ = c["image"].(string)
+				}
+			}
+		}
+	}
+
+	rolloutComplete := desiredReplicas > 0 &&
+		readyReplicas == desiredReplicas &&
+		updatedReplicas == desiredReplicas &&
+		unavailableReplicas == 0
+
+	conditions := []map[string]any{}
+	if conds, ok := status["conditions"].([]any); ok {
+		for _, c := range conds {
+			if cm, ok := c.(map[string]any); ok {
+				conditions = append(conditions, map[string]any{
+					"type":    cm["type"],
+					"status":  cm["status"],
+					"reason":  cm["reason"],
+					"message": cm["message"],
+				})
+			}
+		}
+	}
+
+	return map[string]any{
+		"deployment":           deployment,
+		"namespace":            ns,
+		"revision":             revision,
+		"strategy":             strategy,
+		"image":                image,
+		"desired_replicas":     desiredReplicas,
+		"ready_replicas":       readyReplicas,
+		"updated_replicas":     updatedReplicas,
+		"available_replicas":   availableReplicas,
+		"unavailable_replicas": unavailableReplicas,
+		"rollout_complete":     rolloutComplete,
+		"conditions":           conditions,
+	}, nil
+}
+
+// intFromJSON safely converts a JSON float64 (or nil) to int.
+func intFromJSON(v any) int {
+	if f, ok := v.(float64); ok {
+		return int(f)
+	}
+	return 0
+}
+
+// ---- K8sTopTool -------------------------------------------------------------
+
+// K8sTopTool returns resource usage (CPU / memory) for pods or nodes.
+type K8sTopTool struct{}
+
+func (t *K8sTopTool) Name() string { return "k8s_top" }
+func (t *K8sTopTool) Description() string {
+	return "Show CPU and memory usage for Kubernetes pods or nodes (requires metrics-server)"
+}
+func (t *K8sTopTool) Definition() provider.ToolDef {
+	return provider.ToolDef{
+		Name:        "k8s_top",
+		Description: "Run `kubectl top` to get live CPU and memory usage for pods or nodes. Requires metrics-server to be installed in the cluster. Returns a list of resources with their CPU and memory consumption.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"resource":  map[string]any{"type": "string", "description": "Resource type: 'pods' or 'nodes'"},
+				"namespace": map[string]any{"type": "string", "description": "Namespace for pods (default: default); ignored for nodes"},
+				"selector":  map[string]any{"type": "string", "description": "Label selector to filter pods (optional)"},
+			},
+			"required": []string{"resource"},
+		},
+	}
+}
+func (t *K8sTopTool) Execute(ctx context.Context, args map[string]any) (any, error) {
+	resource, _ := args["resource"].(string)
+	if resource != "pods" && resource != "nodes" {
+		return nil, fmt.Errorf("k8s_top: resource must be 'pods' or 'nodes'")
+	}
+	ns := "default"
+	if v, ok := args["namespace"].(string); ok && v != "" {
+		ns = v
+	}
+
+	cmdArgs := []string{"top", resource}
+	if resource == "pods" {
+		cmdArgs = append(cmdArgs, "-n", ns)
+		if sel, ok := args["selector"].(string); ok && sel != "" {
+			cmdArgs = append(cmdArgs, "--selector="+sel)
+		}
+	}
+
+	stdout, stderr, exitCode, err := kubectlRun(ctx, cmdArgs...)
+	if err != nil {
+		return nil, err
+	}
+	if exitCode != 0 {
+		// Friendly message for missing metrics-server
+		if strings.Contains(stderr, "metrics") || strings.Contains(stderr, "Metrics") {
+			return map[string]any{
+				"error":    "metrics-server not available in this cluster",
+				"raw":      stderr,
+				"resource": resource,
+			}, nil
+		}
+		return map[string]any{"error": stderr, "exit_code": exitCode}, nil
+	}
+
+	items := parseTopOutput(stdout, resource)
+	result := map[string]any{
+		"resource": resource,
+		"items":    items,
+		"count":    len(items),
+	}
+	if resource == "pods" {
+		result["namespace"] = ns
+	}
+	return result, nil
+}
+
+// parseTopOutput parses the tabular output of kubectl top (skip header line).
+// Pod line format:  NAME  CPU(cores)  MEMORY(bytes)
+// Node line format: NAME  CPU(cores)  CPU%  MEMORY(bytes)  MEMORY%
+func parseTopOutput(output, resource string) []map[string]any {
+	items := []map[string]any{}
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for i, line := range lines {
+		if i == 0 { // skip header
+			continue
+		}
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if resource == "pods" && len(fields) >= 3 {
+			items = append(items, map[string]any{
+				"name":   fields[0],
+				"cpu":    fields[1],
+				"memory": fields[2],
+			})
+		} else if resource == "nodes" && len(fields) >= 5 {
+			items = append(items, map[string]any{
+				"name":        fields[0],
+				"cpu":         fields[1],
+				"cpu_percent": fields[2],
+				"memory":      fields[3],
+				"mem_percent": fields[4],
+			})
+		} else if len(fields) >= 3 {
+			items = append(items, map[string]any{
+				"name":   fields[0],
+				"cpu":    fields[1],
+				"memory": fields[2],
+			})
+		}
+	}
+	return items
+}

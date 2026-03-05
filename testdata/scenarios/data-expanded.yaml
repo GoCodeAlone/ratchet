@@ -1,0 +1,34 @@
+name: data-expanded
+loop: false
+description: >
+  Data agent runs expanded analysis with schema inspection and data profiling.
+  Uses db_health_check, schema_inspect, data_profile, db_analyze, and memory_save.
+steps:
+  - content: "Running database health check."
+    tool_calls:
+      - name: db_health_check
+        arguments: {}
+  - content: "Inspecting database schema."
+    tool_calls:
+      - name: schema_inspect
+        arguments: {}
+  - content: "Profiling the tasks table for data quality."
+    tool_calls:
+      - name: data_profile
+        arguments:
+          table: "tasks"
+          sample_size: 500
+  - content: "Analyzing query performance."
+    tool_calls:
+      - name: db_analyze
+        arguments:
+          query: "SELECT * FROM tasks WHERE status = 'pending' AND assigned_to != '' ORDER BY priority DESC"
+  - content: "Saving data analysis findings."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Data expanded: integrity OK, 15 tables, tasks has 30% null assigned_to, full scan on tasks query. Recommend index on (status, assigned_to)."
+          category: "fact"
+  - content: >
+      Data analysis complete. Database healthy. Schema has 15 tables. Tasks table has data quality
+      issue (30% null assigned_to). Query optimization recommended.

@@ -7,10 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/google/uuid"
 )
 
 // CodeReviewTool runs golangci-lint on a Go project and returns structured findings.
@@ -355,5 +357,299 @@ func (t *CodeDiffReviewTool) Execute(ctx context.Context, args map[string]any) (
 		"total_removed": totalRemoved,
 		"base_ref":      baseRef,
 		"head_ref":      headRef,
+	}, nil
+}
+
+// ---- GitLogStatsTool --------------------------------------------------------
+
+// GitLogStatsTool analyses git history to find commit frequency, hotspot files,
+// and top contributors over a configurable number of days.
+type GitLogStatsTool struct{}
+
+func (t *GitLogStatsTool) Name() string { return "git_log_stats" }
+func (t *GitLogStatsTool) Description() string {
+	return "Analyse git history to find total commits, hotspot files, and top contributors"
+}
+func (t *GitLogStatsTool) Definition() provider.ToolDef {
+	return provider.ToolDef{
+		Name:        "git_log_stats",
+		Description: "Analyse git log history for a repository over a period of days. Returns total commit count, hotspot files (most frequently changed), and top contributors by commit count.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"repo_path": map[string]any{
+					"type":        "string",
+					"description": "Path to the git repository",
+				},
+				"days": map[string]any{
+					"type":        "integer",
+					"description": "Number of days of history to analyse (default: 90)",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"description": "Maximum number of hotspot files and contributors to return (default: 20)",
+				},
+			},
+			"required": []string{"repo_path"},
+		},
+	}
+}
+
+func (t *GitLogStatsTool) Execute(ctx context.Context, args map[string]any) (any, error) {
+	repoPath, ok := args["repo_path"].(string)
+	if !ok || repoPath == "" {
+		return nil, fmt.Errorf("git_log_stats: 'repo_path' is required")
+	}
+	days := 90
+	if v, ok := args["days"].(float64); ok && v > 0 {
+		days = int(v)
+	}
+	limit := 20
+	if v, ok := args["limit"].(float64); ok && v > 0 {
+		limit = int(v)
+	}
+
+	since := fmt.Sprintf("%d days ago", days)
+	timeout := 30 * time.Second
+
+	// 1. Total commits
+	totalCommits := 0
+	{
+		execCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		cmd := exec.CommandContext(execCtx, "git", "-C", repoPath, "log", "--format=%H", "--since="+since)
+		out, _ := cmd.Output()
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if strings.TrimSpace(line) != "" {
+				totalCommits++
+			}
+		}
+	}
+
+	// 2. Hotspot files — count file occurrences across all commits
+	fileFreq := map[string]int{}
+	{
+		execCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		cmd := exec.CommandContext(execCtx, "git", "-C", repoPath, "log", "--since="+since, "--name-only", "--pretty=format:")
+		out, _ := cmd.Output()
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				fileFreq[line]++
+			}
+		}
+	}
+
+	// 3. Contributors — count commits per author name
+	authorFreq := map[string]int{}
+	{
+		execCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		cmd := exec.CommandContext(execCtx, "git", "-C", repoPath, "log", "--since="+since, "--format=%aN")
+		out, _ := cmd.Output()
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				authorFreq[line]++
+			}
+		}
+	}
+
+	hotspots := freqMapToSortedList(fileFreq, "file", "changes", limit)
+	contributors := freqMapToSortedList(authorFreq, "name", "commits", limit)
+
+	return map[string]any{
+		"repo_path":     repoPath,
+		"days":          days,
+		"total_commits": totalCommits,
+		"hotspots":      hotspots,
+		"contributors":  contributors,
+	}, nil
+}
+
+// freqMapToSortedList converts a frequency map into a sorted slice of maps,
+// capped at limit entries (highest count first).
+func freqMapToSortedList(freq map[string]int, nameKey, countKey string, limit int) []map[string]any {
+	type entry struct {
+		name  string
+		count int
+	}
+	entries := make([]entry, 0, len(freq))
+	for k, v := range freq {
+		entries = append(entries, entry{k, v})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].count > entries[j].count
+	})
+	if limit > 0 && len(entries) > limit {
+		entries = entries[:limit]
+	}
+	result := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, map[string]any{
+			nameKey:  e.name,
+			countKey: e.count,
+		})
+	}
+	return result
+}
+
+// ---- TestCoverageTool -------------------------------------------------------
+
+// TestCoverageTool runs Go tests with coverage profiling and returns per-package
+// coverage percentages along with an aggregate total.
+type TestCoverageTool struct{}
+
+func (t *TestCoverageTool) Name() string { return "test_coverage" }
+func (t *TestCoverageTool) Description() string {
+	return "Run Go tests with coverage and return per-package coverage percentages"
+}
+func (t *TestCoverageTool) Definition() provider.ToolDef {
+	return provider.ToolDef{
+		Name:        "test_coverage",
+		Description: "Run `go test -coverprofile` on a Go project and return per-package coverage. Aggregates total statement coverage across all packages.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"path": map[string]any{
+					"type":        "string",
+					"description": "Path to the Go project directory (must contain go.mod)",
+				},
+				"packages": map[string]any{
+					"type":        "string",
+					"description": "Package pattern to test (default: ./...)",
+				},
+			},
+			"required": []string{"path"},
+		},
+	}
+}
+
+func (t *TestCoverageTool) Execute(ctx context.Context, args map[string]any) (any, error) {
+	path, ok := args["path"].(string)
+	if !ok || path == "" {
+		return nil, fmt.Errorf("test_coverage: 'path' is required")
+	}
+	packages := "./..."
+	if v, ok := args["packages"].(string); ok && v != "" {
+		packages = v
+	}
+
+	// Write coverprofile to a temp file
+	tmpFile := filepath.Join(os.TempDir(), "ratchet-cover-"+uuid.New().String()+".out")
+	defer func() { _ = os.Remove(tmpFile) }()
+
+	execCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(execCtx, "go", "test", "-coverprofile="+tmpFile, "-count=1", packages)
+	cmd.Dir = path
+	out, _ := cmd.CombinedOutput()
+
+	// Read coverprofile
+	coverData, err := os.ReadFile(tmpFile)
+	if err != nil {
+		// Tests may have failed or produced no coverage; return the raw output as context
+		return map[string]any{
+			"error":    fmt.Sprintf("coverage file not produced: %v", err),
+			"raw":      string(out),
+			"packages": []any{},
+		}, nil
+	}
+
+	return t.parseCoverProfile(coverData)
+}
+
+// parseCoverProfile parses a Go coverage profile and returns per-package
+// statement coverage statistics.
+//
+// Each data line has the format:
+//
+//	file.go:startLine.startCol,endLine.endCol numStatements count
+func (t *TestCoverageTool) parseCoverProfile(data []byte) (any, error) {
+	type pkgStats struct {
+		statements int
+		covered    int
+	}
+	pkgMap := map[string]*pkgStats{}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "mode:") {
+			continue
+		}
+		// Split off the last two fields (numStatements count)
+		lastSpace := strings.LastIndex(line, " ")
+		if lastSpace < 0 {
+			continue
+		}
+		countStr := line[lastSpace+1:]
+		rest := line[:lastSpace]
+		secondLastSpace := strings.LastIndex(rest, " ")
+		if secondLastSpace < 0 {
+			continue
+		}
+		stmtStr := rest[secondLastSpace+1:]
+		fileRange := rest[:secondLastSpace]
+
+		var stmts, count int
+		if _, err := fmt.Sscanf(stmtStr, "%d", &stmts); err != nil {
+			continue
+		}
+		if _, err := fmt.Sscanf(countStr, "%d", &count); err != nil {
+			continue
+		}
+
+		// Derive package from file path (everything before last '/')
+		pkg := fileRange
+		if idx := strings.LastIndex(fileRange, "/"); idx >= 0 {
+			pkg = fileRange[:idx]
+		}
+		// Strip trailing position info if present (file.go:L.C,L.C → file.go)
+		if idx := strings.Index(pkg, ":"); idx >= 0 {
+			pkg = pkg[:idx]
+		}
+
+		if _, exists := pkgMap[pkg]; !exists {
+			pkgMap[pkg] = &pkgStats{}
+		}
+		pkgMap[pkg].statements += stmts
+		if count > 0 {
+			pkgMap[pkg].covered += stmts
+		}
+	}
+
+	totalStmts, totalCovered := 0, 0
+	uncoveredPkgs := []string{}
+	pkgList := make([]map[string]any, 0, len(pkgMap))
+
+	for name, stats := range pkgMap {
+		cov := 0.0
+		if stats.statements > 0 {
+			cov = float64(stats.covered) / float64(stats.statements) * 100
+		}
+		if stats.covered == 0 && stats.statements > 0 {
+			uncoveredPkgs = append(uncoveredPkgs, name)
+		}
+		pkgList = append(pkgList, map[string]any{
+			"package":    name,
+			"coverage":   fmt.Sprintf("%.1f", cov),
+			"statements": stats.statements,
+			"covered":    stats.covered,
+		})
+		totalStmts += stats.statements
+		totalCovered += stats.covered
+	}
+
+	totalCoverage := 0.0
+	if totalStmts > 0 {
+		totalCoverage = float64(totalCovered) / float64(totalStmts) * 100
+	}
+
+	return map[string]any{
+		"packages":           pkgList,
+		"total_coverage":     fmt.Sprintf("%.1f", totalCoverage),
+		"uncovered_packages": uncoveredPkgs,
 	}, nil
 }

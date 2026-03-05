@@ -1,0 +1,36 @@
+name: ops-expanded
+loop: false
+description: >
+  Operations agent runs expanded monitoring with deployment status and resource metrics.
+  Uses infra_health_check, deployment_status, k8s_top (pods), k8s_top (nodes), and memory_save.
+steps:
+  - content: "Running infrastructure health check."
+    tool_calls:
+      - name: infra_health_check
+        arguments: {}
+  - content: "Checking deployment rollout status."
+    tool_calls:
+      - name: deployment_status
+        arguments:
+          deployment: "ratchet"
+          namespace: "default"
+  - content: "Checking pod resource usage."
+    tool_calls:
+      - name: k8s_top
+        arguments:
+          resource: "pods"
+          namespace: "default"
+  - content: "Checking node resource utilization."
+    tool_calls:
+      - name: k8s_top
+        arguments:
+          resource: "nodes"
+  - content: "Saving operational findings."
+    tool_calls:
+      - name: memory_save
+        arguments:
+          content: "Ops expanded: health score 95, ratchet deployment rollout complete (1/1 ready), node CPU 45%, memory 62%. No resource pressure."
+          category: "fact"
+  - content: >
+      Operations monitoring complete. All systems healthy. Deployment stable,
+      resource utilization within normal bounds.
