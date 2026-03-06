@@ -42,8 +42,8 @@ github.com/CrisisTextLine/modular/modules/scheduler v0.4.0 h1:PDYAD+hL7E6mM7YJey
 github.com/CrisisTextLine/modular/modules/scheduler v0.4.0/go.mod h1:ULpROdMxp2/3OeUFTjDtLd3cqYVf4gyu90j6C+jjgQY=
 github.com/DataDog/datadog-go/v5 v5.4.0 h1:Ea3eXUVwrVV28F/fo3Dr3aa+TL/Z7Xi6SUPKW8L99aI=
 github.com/DataDog/datadog-go/v5 v5.4.0/go.mod h1:K9kcYBlxkcPP8tvvjZZKs/m1edNAUFzBbdpTUKfCsuw=
-github.com/GoCodeAlone/workflow v0.3.11 h1:lhGX7gPokGQ3puX/uyDJPupOO643KCiEXweREIzoilw=
-github.com/GoCodeAlone/workflow v0.3.11/go.mod h1:nzM8oUW0g/zGwc5Gaei7C0JHHmeHXdQcx0hqrN1pvQQ=
+github.com/GoCodeAlone/workflow v0.3.12 h1:gLpc4YMO4uiIRnvir1R6fpT9gZuddVc9SalDWBBcYu4=
+github.com/GoCodeAlone/workflow v0.3.12/go.mod h1:nzM8oUW0g/zGwc5Gaei7C0JHHmeHXdQcx0hqrN1pvQQ=
 github.com/GoCodeAlone/workflow-plugin-agent v0.1.1 h1:Y10+x3oL0By2x9FsfJ//cfQXYi3ijCLHxxSBvLyCeGw=
 github.com/GoCodeAlone/workflow-plugin-agent v0.1.1/go.mod h1:6XDeyptKoFGSlZdr3y0TFp0nGxFmuIrWl0UFi7633HU=
 github.com/GoCodeAlone/yaegi v0.17.1 h1:aPAwU29L9cGceRAff02c5pjQcT5KapDB4fWFZK9tElE=
