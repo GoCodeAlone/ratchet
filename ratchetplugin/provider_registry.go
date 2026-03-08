@@ -3,6 +3,7 @@ package ratchetplugin
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -15,12 +16,22 @@ import (
 type LLMProviderConfig struct {
 	ID         string `json:"id"`
 	Alias      string `json:"alias"`
-	Type       string `json:"type"`        // "anthropic", "openai", "copilot", "mock"
+	Type       string `json:"type"`        // provider type (e.g. "anthropic", "openai", "copilot_models", "openai_azure", "anthropic_foundry", "anthropic_vertex", "anthropic_bedrock")
 	Model      string `json:"model"`       // model identifier
 	SecretName string `json:"secret_name"` // key in secrets provider for API key
 	BaseURL    string `json:"base_url"`    // optional override
 	MaxTokens  int    `json:"max_tokens"`  // optional override
 	IsDefault  int    `json:"is_default"`  // 1 if this is the default provider
+	Settings   string `json:"settings"`    // JSON object with provider-specific settings (resource, region, deployment_name, project_id, etc.)
+}
+
+// settings parses the Settings JSON into a map. Returns empty map on error.
+func (c *LLMProviderConfig) settings() map[string]string {
+	m := make(map[string]string)
+	if c.Settings != "" && c.Settings != "{}" {
+		_ = json.Unmarshal([]byte(c.Settings), &m)
+	}
+	return m
 }
 
 // ProviderFactory creates a provider.Provider from an API key and config.
@@ -51,6 +62,11 @@ func NewProviderRegistry(db *sql.DB, secretsProvider secrets.Provider) *Provider
 	r.factories["openrouter"] = openrouterProviderFactory
 	r.factories["copilot"] = copilotProviderFactory
 	r.factories["cohere"] = cohereProviderFactory
+	r.factories["copilot_models"] = copilotModelsProviderFactory
+	r.factories["openai_azure"] = openaiAzureProviderFactory
+	r.factories["anthropic_foundry"] = anthropicFoundryProviderFactory
+	r.factories["anthropic_vertex"] = anthropicVertexProviderFactory
+	r.factories["anthropic_bedrock"] = anthropicBedrockProviderFactory
 
 	return r
 }
@@ -83,11 +99,11 @@ func (r *ProviderRegistry) GetDefault(ctx context.Context) (provider.Provider, e
 
 	var cfg LLMProviderConfig
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, alias, type, model, secret_name, base_url, max_tokens, is_default
+		`SELECT id, alias, type, model, secret_name, base_url, max_tokens, settings, is_default
 		 FROM llm_providers WHERE is_default = 1 LIMIT 1`)
 
 	err := row.Scan(&cfg.ID, &cfg.Alias, &cfg.Type, &cfg.Model, &cfg.SecretName,
-		&cfg.BaseURL, &cfg.MaxTokens, &cfg.IsDefault)
+		&cfg.BaseURL, &cfg.MaxTokens, &cfg.Settings, &cfg.IsDefault)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("provider registry: no default provider configured")
@@ -170,11 +186,11 @@ func (r *ProviderRegistry) loadConfig(ctx context.Context, alias string) (*LLMPr
 
 	var cfg LLMProviderConfig
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, alias, type, model, secret_name, base_url, max_tokens, is_default
+		`SELECT id, alias, type, model, secret_name, base_url, max_tokens, settings, is_default
 		 FROM llm_providers WHERE alias = ?`, alias)
 
 	err := row.Scan(&cfg.ID, &cfg.Alias, &cfg.Type, &cfg.Model, &cfg.SecretName,
-		&cfg.BaseURL, &cfg.MaxTokens, &cfg.IsDefault)
+		&cfg.BaseURL, &cfg.MaxTokens, &cfg.Settings, &cfg.IsDefault)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("alias %q not found", alias)
@@ -266,4 +282,64 @@ func cohereProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provi
 		BaseURL:   cfg.BaseURL,
 		MaxTokens: cfg.MaxTokens,
 	}), nil
+}
+
+func copilotModelsProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
+	return provider.NewCopilotModelsProvider(provider.CopilotModelsConfig{
+		Token:     apiKey,
+		Model:     cfg.Model,
+		BaseURL:   cfg.BaseURL,
+		MaxTokens: cfg.MaxTokens,
+	}), nil
+}
+
+func openaiAzureProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
+	s := cfg.settings()
+	return provider.NewOpenAIAzureProvider(provider.OpenAIAzureConfig{
+		Resource:       s["resource"],
+		DeploymentName: s["deployment_name"],
+		APIVersion:     s["api_version"],
+		APIKey:         apiKey,
+		EntraToken:     s["entra_token"],
+		MaxTokens:      cfg.MaxTokens,
+	})
+}
+
+func anthropicFoundryProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
+	s := cfg.settings()
+	return provider.NewAnthropicFoundryProvider(provider.AnthropicFoundryConfig{
+		Resource:   s["resource"],
+		Model:      cfg.Model,
+		MaxTokens:  cfg.MaxTokens,
+		APIKey:     apiKey,
+		EntraToken: s["entra_token"],
+	})
+}
+
+func anthropicVertexProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
+	s := cfg.settings()
+	credJSON := s["credentials_json"]
+	if credJSON == "" {
+		credJSON = apiKey // fallback: secret may contain the full GCP credentials JSON
+	}
+	return provider.NewAnthropicVertexProvider(provider.AnthropicVertexConfig{
+		ProjectID:       s["project_id"],
+		Region:          s["region"],
+		Model:           cfg.Model,
+		MaxTokens:       cfg.MaxTokens,
+		CredentialsJSON: credJSON,
+	})
+}
+
+func anthropicBedrockProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
+	s := cfg.settings()
+	return provider.NewAnthropicBedrockProvider(provider.AnthropicBedrockConfig{
+		Region:         s["region"],
+		Model:          cfg.Model,
+		MaxTokens:      cfg.MaxTokens,
+		AccessKeyID:    s["access_key_id"],
+		SecretAccessKey: apiKey,
+		SessionToken:   s["session_token"],
+		BaseURL:        cfg.BaseURL,
+	})
 }

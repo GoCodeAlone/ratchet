@@ -59,6 +59,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 		secret_name TEXT NOT NULL DEFAULT '',
 		base_url TEXT NOT NULL DEFAULT '',
 		max_tokens INTEGER NOT NULL DEFAULT 4096,
+		settings TEXT NOT NULL DEFAULT '{}',
 		is_default INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME NOT NULL DEFAULT (datetime('now')),
 		updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
@@ -269,6 +270,56 @@ func TestProviderRegistryTestConnection(t *testing.T) {
 	}
 	if latency <= 0 {
 		t.Error("expected positive latency")
+	}
+}
+
+func TestProviderRegistryNewProviderTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		typ      string
+		settings string
+		wantName string
+	}{
+		{"copilot_models", "copilot_models", "{}", "copilot_models"},
+		{"openai_azure", "openai_azure", `{"resource":"myres","deployment_name":"gpt4"}`, "openai_azure"},
+		{"anthropic_foundry", "anthropic_foundry", `{"resource":"myres"}`, "anthropic_foundry"},
+		{"anthropic_bedrock", "anthropic_bedrock", `{"region":"us-east-1","access_key_id":"AKID"}`, "anthropic_bedrock"},
+	}
+	// Note: anthropic_vertex requires valid GCP credentials JSON or ADC and is tested separately.
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupTestDB(t)
+			sec := &memSecretsProvider{data: map[string]string{
+				"TEST_KEY": "test-secret",
+			}}
+
+			_, err := db.Exec(`INSERT INTO llm_providers (id, alias, type, model, secret_name, settings)
+				VALUES (?, ?, ?, 'test-model', 'TEST_KEY', ?)`,
+				tt.name, tt.name, tt.typ, tt.settings)
+			if err != nil {
+				t.Fatalf("insert: %v", err)
+			}
+
+			reg := NewProviderRegistry(db, sec)
+			p, err := reg.GetByAlias(t.Context(), tt.name)
+			if err != nil {
+				t.Fatalf("GetByAlias: %v", err)
+			}
+			if p.Name() != tt.wantName {
+				t.Errorf("expected %q provider, got %q", tt.wantName, p.Name())
+			}
+		})
+	}
+}
+
+func TestProviderRegistryVertexFactoryRegistered(t *testing.T) {
+	db := setupTestDB(t)
+	sec := &memSecretsProvider{data: map[string]string{}}
+	reg := NewProviderRegistry(db, sec)
+
+	if _, ok := reg.factories["anthropic_vertex"]; !ok {
+		t.Fatal("anthropic_vertex factory not registered")
 	}
 }
 
