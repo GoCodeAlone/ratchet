@@ -7,22 +7,62 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
+// copilotTestServer creates a test server that handles both token exchange and
+// the given API handler. Returns the server and a cleanup function.
+func copilotTestServer(t *testing.T, apiHandler http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+
+	// Mock token exchange endpoint
+	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		if auth == "" {
+			t.Error("token exchange: expected Authorization header")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(copilotTokenResponse{
+			Token:     "exchanged-bearer-token",
+			ExpiresAt: time.Now().Add(30 * time.Minute).Unix(),
+		})
+	})
+
+	// Chat completions endpoint
+	mux.HandleFunc("/chat/completions", apiHandler)
+
+	// Models endpoint (for listCopilotModels tests)
+	mux.HandleFunc("/models", apiHandler)
+
+	return httptest.NewServer(mux)
+}
+
+// newTestCopilotProvider creates a CopilotProvider wired to the test server.
+func newTestCopilotProvider(server *httptest.Server) *CopilotProvider {
+	return NewCopilotProvider(CopilotConfig{
+		Token:    "test-oauth-token",
+		BaseURL:  server.URL,
+		TokenURL: server.URL + "/token",
+	})
+}
+
 func TestCopilotChat(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify headers
-		if r.Header.Get("Authorization") != "Bearer test-token" {
-			t.Errorf("expected Authorization=Bearer test-token, got %s", r.Header.Get("Authorization"))
+	server := copilotTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		// Verify the exchanged bearer token is used (not the raw OAuth token)
+		if r.Header.Get("Authorization") != "Bearer exchanged-bearer-token" {
+			t.Errorf("expected exchanged bearer token, got %s", r.Header.Get("Authorization"))
 		}
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("expected Content-Type=application/json, got %s", r.Header.Get("Content-Type"))
 		}
-		if r.Header.Get("Copilot-Integration-Id") != copilotIntegrationID {
-			t.Errorf("expected Copilot-Integration-Id=%s, got %s", copilotIntegrationID, r.Header.Get("Copilot-Integration-Id"))
+		if r.Header.Get("Copilot-Integration-Id") != "vscode-chat" {
+			t.Errorf("expected Copilot-Integration-Id=vscode-chat, got %s", r.Header.Get("Copilot-Integration-Id"))
+		}
+		if r.Header.Get("Editor-Version") == "" {
+			t.Error("expected Editor-Version header")
 		}
 
-		// Verify request body
 		var req copilotRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
@@ -37,7 +77,6 @@ func TestCopilotChat(t *testing.T) {
 			t.Errorf("expected first message role=system, got %s", req.Messages[0].Role)
 		}
 
-		// Return response
 		content := "Hello! How can I help?"
 		resp := copilotResponse{
 			ID: "chatcmpl-123",
@@ -51,13 +90,10 @@ func TestCopilotChat(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	resp, err := p.Chat(context.Background(), []Message{
 		{Role: RoleSystem, Content: "You are helpful."},
@@ -79,7 +115,7 @@ func TestCopilotChat(t *testing.T) {
 }
 
 func TestCopilotChatWithTools(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		var req copilotRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
@@ -124,13 +160,10 @@ func TestCopilotChatWithTools(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	resp, err := p.Chat(context.Background(), []Message{
 		{Role: RoleUser, Content: "Read /tmp/test.txt"},
@@ -170,13 +203,12 @@ func TestCopilotChatWithTools(t *testing.T) {
 }
 
 func TestCopilotChatToolResult(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		var req copilotRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
 
-		// Verify tool result message is sent with tool_call_id
 		found := false
 		for _, msg := range req.Messages {
 			if msg.Role == "tool" && msg.ToolCallID == "call_abc" {
@@ -187,7 +219,6 @@ func TestCopilotChatToolResult(t *testing.T) {
 			t.Error("expected tool result message with tool_call_id")
 		}
 
-		// Verify assistant message includes tool_calls
 		for _, msg := range req.Messages {
 			if msg.Role != "assistant" || msg.ToolCalls == nil {
 				continue
@@ -215,13 +246,10 @@ func TestCopilotChatToolResult(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	resp, err := p.Chat(context.Background(), []Message{
 		{Role: RoleUser, Content: "Read /tmp/test.txt"},
@@ -240,16 +268,13 @@ func TestCopilotChatToolResult(t *testing.T) {
 }
 
 func TestCopilotChatAPIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = fmt.Fprint(w, `{"error":{"type":"authentication_error","message":"invalid token"}}`)
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "bad-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	_, err := p.Chat(context.Background(), []Message{
 		{Role: RoleUser, Content: "Hello"},
@@ -264,7 +289,7 @@ func TestCopilotChatAPIError(t *testing.T) {
 }
 
 func TestCopilotStream(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		var req copilotRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
@@ -294,13 +319,10 @@ func TestCopilotStream(t *testing.T) {
 		}
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	ch, err := p.Stream(context.Background(), []Message{
 		{Role: RoleUser, Content: "Hello"},
@@ -340,7 +362,7 @@ func TestCopilotStream(t *testing.T) {
 }
 
 func TestCopilotStreamWithToolCall(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -360,13 +382,10 @@ func TestCopilotStreamWithToolCall(t *testing.T) {
 		}
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	ch, err := p.Stream(context.Background(), []Message{
 		{Role: RoleUser, Content: "Read file"},
@@ -416,6 +435,9 @@ func TestCopilotDefaults(t *testing.T) {
 	if p.config.MaxTokens != defaultCopilotMaxTokens {
 		t.Errorf("expected default max tokens %d, got %d", defaultCopilotMaxTokens, p.config.MaxTokens)
 	}
+	if p.config.TokenURL != copilotTokenExchangeURL {
+		t.Errorf("expected default token URL %s, got %s", copilotTokenExchangeURL, p.config.TokenURL)
+	}
 }
 
 func TestCopilotCustomConfig(t *testing.T) {
@@ -439,8 +461,123 @@ func TestCopilotCustomConfig(t *testing.T) {
 	}
 }
 
+func TestCopilotTokenExchange(t *testing.T) {
+	tokenExchangeCalled := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			tokenExchangeCalled = true
+			auth := r.Header.Get("Authorization")
+			if auth != "Token my-oauth-token" {
+				t.Errorf("expected 'Token my-oauth-token', got %q", auth)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(copilotTokenResponse{
+				Token:     "short-lived-bearer",
+				ExpiresAt: time.Now().Add(30 * time.Minute).Unix(),
+			})
+		case "/chat/completions":
+			auth := r.Header.Get("Authorization")
+			if auth != "Bearer short-lived-bearer" {
+				t.Errorf("expected 'Bearer short-lived-bearer', got %q", auth)
+			}
+			content := "ok"
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(copilotResponse{
+				ID:      "chatcmpl-tok",
+				Choices: []copilotChoice{{Index: 0, Message: copilotResMsg{Role: "assistant", Content: &content}}},
+			})
+		}
+	}))
+	defer server.Close()
+
+	p := NewCopilotProvider(CopilotConfig{
+		Token:    "my-oauth-token",
+		BaseURL:  server.URL,
+		TokenURL: server.URL + "/token",
+	})
+
+	_, err := p.Chat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if !tokenExchangeCalled {
+		t.Error("expected token exchange to be called")
+	}
+}
+
+func TestCopilotTokenExchangeFailure(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = fmt.Fprint(w, `{"message":"Bad credentials"}`)
+			return
+		}
+	}))
+	defer server.Close()
+
+	p := NewCopilotProvider(CopilotConfig{
+		Token:    "bad-oauth-token",
+		BaseURL:  server.URL,
+		TokenURL: server.URL + "/token",
+	})
+
+	_, err := p.Chat(context.Background(), []Message{
+		{Role: RoleUser, Content: "test"},
+	}, nil)
+	if err == nil {
+		t.Fatal("expected error when token exchange fails")
+	}
+	if !contains(err.Error(), "token exchange failed") {
+		t.Errorf("expected 'token exchange failed' in error, got: %v", err)
+	}
+}
+
+func TestCopilotTokenCaching(t *testing.T) {
+	exchangeCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			exchangeCount++
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(copilotTokenResponse{
+				Token:     "cached-bearer",
+				ExpiresAt: time.Now().Add(30 * time.Minute).Unix(),
+			})
+		case "/chat/completions":
+			content := "ok"
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(copilotResponse{
+				ID:      "chatcmpl-cache",
+				Choices: []copilotChoice{{Index: 0, Message: copilotResMsg{Role: "assistant", Content: &content}}},
+			})
+		}
+	}))
+	defer server.Close()
+
+	p := NewCopilotProvider(CopilotConfig{
+		Token:    "test-token",
+		BaseURL:  server.URL,
+		TokenURL: server.URL + "/token",
+	})
+
+	// Two Chat calls should only exchange token once (cached)
+	for range 2 {
+		_, err := p.Chat(context.Background(), []Message{{Role: RoleUser, Content: "test"}}, nil)
+		if err != nil {
+			t.Fatalf("Chat: %v", err)
+		}
+	}
+
+	if exchangeCount != 1 {
+		t.Errorf("expected 1 token exchange (cached), got %d", exchangeCount)
+	}
+}
+
 func TestCopilotChatNullContent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		resp := copilotResponse{
 			ID: "chatcmpl-null",
 			Choices: []copilotChoice{
@@ -469,13 +606,10 @@ func TestCopilotChatNullContent(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	resp, err := p.Chat(context.Background(), []Message{
 		{Role: RoleUser, Content: "Search for test"},
@@ -493,14 +627,13 @@ func TestCopilotChatNullContent(t *testing.T) {
 }
 
 func TestCopilotStreamMultipleToolCalls(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			t.Fatal("expected response writer to support flushing")
 		}
 
-		// Two parallel tool calls with distinct index values.
 		events := []string{
 			`{"id":"chatcmpl-3","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_aaa","type":"function","function":{"name":"get_weather","arguments":""}}]}}]}`,
 			`{"id":"chatcmpl-3","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_bbb","type":"function","function":{"name":"get_time","arguments":""}}]}}]}`,
@@ -515,13 +648,10 @@ func TestCopilotStreamMultipleToolCalls(t *testing.T) {
 		}
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	ch, err := p.Stream(context.Background(), []Message{
 		{Role: RoleUser, Content: "Get weather and time"},
@@ -574,26 +704,34 @@ func TestCopilotStreamMultipleToolCalls(t *testing.T) {
 
 func TestListCopilotModels(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Header.Get("Authorization") == "" {
-				t.Error("expected Authorization header")
+		mux := http.NewServeMux()
+		mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(copilotTokenResponse{
+				Token:     "models-bearer",
+				ExpiresAt: time.Now().Add(30 * time.Minute).Unix(),
+			})
+		})
+		mux.HandleFunc("/models", func(w http.ResponseWriter, r *http.Request) {
+			if r.Header.Get("Authorization") != "Bearer models-bearer" {
+				t.Errorf("expected exchanged bearer, got %s", r.Header.Get("Authorization"))
 			}
-			if r.Header.Get("Copilot-Integration-Id") != copilotIntegrationID {
-				t.Errorf("expected Copilot-Integration-Id=%s, got %s", copilotIntegrationID, r.Header.Get("Copilot-Integration-Id"))
+			if r.Header.Get("Copilot-Integration-Id") != "vscode-chat" {
+				t.Errorf("expected vscode-chat, got %s", r.Header.Get("Copilot-Integration-Id"))
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprint(w, `{"data":[{"id":"gpt-4.1","name":"GPT-4.1"},{"id":"claude-sonnet-4","name":"Claude Sonnet 4"},{"id":"gpt-4o","name":"GPT-4o"}]}`)
-		}))
+		})
+		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		models, err := listCopilotModels(context.Background(), "test-token", server.URL)
+		models, err := listCopilotModels(context.Background(), "test-token", server.URL, server.URL+"/token")
 		if err != nil {
 			t.Fatalf("listCopilotModels: %v", err)
 		}
 		if len(models) != 3 {
 			t.Fatalf("expected 3 models, got %d", len(models))
 		}
-		// Verify sorted by ID
 		if models[0].ID != "claude-sonnet-4" {
 			t.Errorf("expected first model claude-sonnet-4, got %s", models[0].ID)
 		}
@@ -609,13 +747,14 @@ func TestListCopilotModels(t *testing.T) {
 	})
 
 	t.Run("non200_falls_back", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Token exchange fails → fallback models
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = fmt.Fprint(w, `{"error":"unauthorized"}`)
 		}))
 		defer server.Close()
 
-		models, err := listCopilotModels(context.Background(), "bad-token", server.URL)
+		models, err := listCopilotModels(context.Background(), "bad-token", server.URL, server.URL+"/token")
 		if err != nil {
 			t.Fatalf("expected no error on non-200, got %v", err)
 		}
@@ -626,13 +765,22 @@ func TestListCopilotModels(t *testing.T) {
 	})
 
 	t.Run("invalid_json_falls_back", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(copilotTokenResponse{
+				Token:     "bearer",
+				ExpiresAt: time.Now().Add(30 * time.Minute).Unix(),
+			})
+		})
+		mux.HandleFunc("/models", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprint(w, `not valid json`)
-		}))
+		})
+		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		models, err := listCopilotModels(context.Background(), "test-token", server.URL)
+		models, err := listCopilotModels(context.Background(), "test-token", server.URL, server.URL+"/token")
 		if err != nil {
 			t.Fatalf("expected no error on invalid JSON, got %v", err)
 		}
@@ -643,13 +791,22 @@ func TestListCopilotModels(t *testing.T) {
 	})
 
 	t.Run("empty_data_falls_back", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/token", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(copilotTokenResponse{
+				Token:     "bearer",
+				ExpiresAt: time.Now().Add(30 * time.Minute).Unix(),
+			})
+		})
+		mux.HandleFunc("/models", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprint(w, `{"data":[]}`)
-		}))
+		})
+		server := httptest.NewServer(mux)
 		defer server.Close()
 
-		models, err := listCopilotModels(context.Background(), "test-token", server.URL)
+		models, err := listCopilotModels(context.Background(), "test-token", server.URL, server.URL+"/token")
 		if err != nil {
 			t.Fatalf("expected no error on empty data, got %v", err)
 		}
@@ -661,7 +818,7 @@ func TestListCopilotModels(t *testing.T) {
 }
 
 func TestCopilotChatInvalidToolArgsJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		content := "calling tool"
 		resp := copilotResponse{
 			ID: "chatcmpl-bad",
@@ -688,13 +845,10 @@ func TestCopilotChatInvalidToolArgsJSON(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	_, err := p.Chat(context.Background(), []Message{
 		{Role: RoleUser, Content: "Do thing"},
@@ -709,7 +863,7 @@ func TestCopilotChatInvalidToolArgsJSON(t *testing.T) {
 }
 
 func TestCopilotStreamInvalidToolArgsJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := copilotTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -728,13 +882,10 @@ func TestCopilotStreamInvalidToolArgsJSON(t *testing.T) {
 		}
 		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 		flusher.Flush()
-	}))
+	})
 	defer server.Close()
 
-	p := NewCopilotProvider(CopilotConfig{
-		Token:   "test-token",
-		BaseURL: server.URL,
-	})
+	p := newTestCopilotProvider(server)
 
 	ch, err := p.Stream(context.Background(), []Message{
 		{Role: RoleUser, Content: "Do thing"},
