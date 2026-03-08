@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 
 	_ "modernc.org/sqlite"
 )

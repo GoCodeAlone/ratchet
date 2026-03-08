@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // MemoryEntryResult is a minimal view of a memory entry returned by tools.

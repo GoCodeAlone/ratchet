@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // defaultModelContextLimits maps provider model name patterns to their token limits.

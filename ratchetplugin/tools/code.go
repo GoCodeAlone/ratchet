@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/google/uuid"
 )
 

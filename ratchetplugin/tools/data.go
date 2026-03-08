@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // DBAnalyzeTool runs EXPLAIN QUERY PLAN on SQL queries for optimization analysis.

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // GitCloneTool clones a git repository into the workspace.

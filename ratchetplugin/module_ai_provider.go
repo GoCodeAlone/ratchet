@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/CrisisTextLine/modular"
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // AgentSeed holds the definition of an agent to seed into the database.
@@ -104,6 +104,10 @@ func (m *mockProvider) Stream(ctx context.Context, messages []provider.Message, 
 	return ch, nil
 }
 
+func (m *mockProvider) AuthModeInfo() provider.AuthModeInfo {
+	return provider.AuthModeInfo{Mode: "none", DisplayName: "Mock (no auth)"}
+}
+
 // errProvider is a sentinel provider that always returns a configuration error.
 // It is used when the factory receives an unrecognized provider type so that
 // AIProviderModule.Init can fail fast rather than silently degrading to a stub.
@@ -119,4 +123,8 @@ func (e *errProvider) Chat(_ context.Context, _ []provider.Message, _ []provider
 
 func (e *errProvider) Stream(_ context.Context, _ []provider.Message, _ []provider.ToolDef) (<-chan provider.StreamEvent, error) {
 	return nil, e.err
+}
+
+func (e *errProvider) AuthModeInfo() provider.AuthModeInfo {
+	return provider.AuthModeInfo{Mode: "none", DisplayName: "Error provider"}
 }

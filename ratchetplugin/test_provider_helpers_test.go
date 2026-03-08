@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 	"github.com/GoCodeAlone/workflow/module"
 )

@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	"github.com/GoCodeAlone/ratchet/plugin"
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/GoCodeAlone/workflow/module"
 	"github.com/GoCodeAlone/workflow/secrets"
 
@@ -692,8 +692,8 @@ func TestMCPServer_ToolsList(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected tools to be a list, got %T", toolsRaw)
 	}
-	if len(toolsList) != 17 {
-		t.Errorf("expected 17 tools, got %d", len(toolsList))
+	if len(toolsList) != 20 {
+		t.Errorf("expected 20 tools, got %d", len(toolsList))
 	}
 }
 
@@ -1004,6 +1004,7 @@ func TestPlugin_ModuleFactories(t *testing.T) {
 		"ratchet.mcp_client",
 		"ratchet.mcp_server",
 		"ratchet.tool_policy_engine",
+		"authz.casbin",
 	}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {
@@ -1029,6 +1030,11 @@ func TestPlugin_StepFactories(t *testing.T) {
 		"step.mcp_reload", "step.oauth_exchange",
 		"step.approval_resolve", "step.webhook_process", "step.security_audit",
 		"step.test_interact", "step.human_request_resolve",
+		"step.memory_extract",
+		"step.bcrypt_check", "step.bcrypt_hash",
+		"step.jwt_generate", "step.jwt_decode",
+		"step.authz_check_casbin", "step.authz_add_policy",
+		"step.authz_remove_policy", "step.authz_role_assign",
 	}
 	for _, name := range expected {
 		if _, ok := factories[name]; !ok {

@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/GoCodeAlone/ratchet/plugin"
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 )
 

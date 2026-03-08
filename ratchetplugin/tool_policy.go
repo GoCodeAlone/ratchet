@@ -45,7 +45,7 @@ var toolGroups = map[string][]string{
 	"group:fs":      {"file_read", "file_write", "file_list"},
 	"group:runtime": {"shell_exec"},
 	"group:web":     {"web_fetch"},
-	"group:git":     {"git_clone", "git_status", "git_commit", "git_push", "git_diff"},
+	"group:git":     {"git_clone", "git_status", "git_commit", "git_push", "git_diff", "git_pr_create"},
 	"group:task":    {"task_create", "task_update"},
 	"group:message": {"message_send"},
 }

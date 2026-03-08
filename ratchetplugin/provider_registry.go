@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/GoCodeAlone/workflow/secrets"
 )
 
@@ -50,6 +50,7 @@ func NewProviderRegistry(db *sql.DB, secretsProvider secrets.Provider) *Provider
 	r.factories["openai"] = openaiProviderFactory
 	r.factories["openrouter"] = openrouterProviderFactory
 	r.factories["copilot"] = copilotProviderFactory
+	r.factories["cohere"] = cohereProviderFactory
 
 	return r
 }
@@ -241,15 +242,26 @@ func openaiProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provi
 }
 
 func openrouterProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = "https://openrouter.ai/api/v1"
-	}
-	return openaiProviderFactory(apiKey, cfg)
+	return provider.NewOpenRouterProvider(provider.OpenRouterConfig{
+		APIKey:    apiKey,
+		Model:     cfg.Model,
+		BaseURL:   cfg.BaseURL,
+		MaxTokens: cfg.MaxTokens,
+	}), nil
 }
 
 func copilotProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
 	return provider.NewCopilotProvider(provider.CopilotConfig{
 		Token:     apiKey,
+		Model:     cfg.Model,
+		BaseURL:   cfg.BaseURL,
+		MaxTokens: cfg.MaxTokens,
+	}), nil
+}
+
+func cohereProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
+	return provider.NewCohereProvider(provider.CohereConfig{
+		APIKey:    apiKey,
 		Model:     cfg.Model,
 		BaseURL:   cfg.BaseURL,
 		MaxTokens: cfg.MaxTokens,

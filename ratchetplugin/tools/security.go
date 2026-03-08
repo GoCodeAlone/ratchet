@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // SecurityScanTool runs a platform security audit and returns structured findings.

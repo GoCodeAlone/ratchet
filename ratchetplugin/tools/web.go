@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // WebFetchTool performs HTTP GET requests.

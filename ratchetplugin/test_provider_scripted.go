@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"gopkg.in/yaml.v3"
 )
 

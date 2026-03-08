@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // --- lookupContextLimit ---
@@ -153,6 +153,9 @@ func (m *mockSummaryProvider) Stream(_ context.Context, _ []provider.Message, _ 
 	close(ch)
 	return ch, nil
 }
+func (m *mockSummaryProvider) AuthModeInfo() provider.AuthModeInfo {
+	return provider.AuthModeInfo{Mode: "none", DisplayName: "Mock summary"}
+}
 
 func TestCompact_ShortConversation(t *testing.T) {
 	cm := NewContextManager("gpt-4o", 0)
@@ -297,6 +300,9 @@ func (e *errorProvider) Chat(_ context.Context, _ []provider.Message, _ []provid
 }
 func (e *errorProvider) Stream(_ context.Context, _ []provider.Message, _ []provider.ToolDef) (<-chan provider.StreamEvent, error) {
 	return nil, fmt.Errorf("provider error")
+}
+func (e *errorProvider) AuthModeInfo() provider.AuthModeInfo {
+	return provider.AuthModeInfo{Mode: "none", DisplayName: "Error provider"}
 }
 
 func TestCompact_MultipleCompactions(t *testing.T) {

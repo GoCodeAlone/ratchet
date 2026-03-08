@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 )

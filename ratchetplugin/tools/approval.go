@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // ApprovalCreator is the interface needed by RequestApprovalTool to create approvals.

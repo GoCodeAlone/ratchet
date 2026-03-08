@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/CrisisTextLine/modular"
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
 	"github.com/GoCodeAlone/workflow/module"
@@ -87,7 +87,7 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		case *AIProviderModule:
 			aiProvider = mod.Provider()
 		case *agentplugin.ProviderModule:
-			aiProvider = agentProviderToRatchet(mod)
+			aiProvider = mod.Provider()
 		default:
 			return nil, fmt.Errorf("agent_execute step %q: service %q is not a recognized provider module (got %T)", s.name, providerSvcName, svc)
 		}
@@ -300,6 +300,14 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 					logger.Error("agent_execute: chat failed", "agent", agentName, "iteration", iterCount, "error", err)
 				}
 			}
+			if sseHub := findSSEHub(s.app); sseHub != nil {
+				eventData, _ := json.Marshal(map[string]any{
+					"task_id":  taskID,
+					"agent_id": agentID,
+					"status":   "failed",
+				})
+				sseHub.BroadcastEvent("task_completed", string(eventData))
+			}
 			output := map[string]any{
 				"result":     errMsg,
 				"status":     "failed",
@@ -357,6 +365,14 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 			// Handle approval gates: if the tool was request_approval, pause and wait.
 			if tc.Name == "request_approval" && !isError {
 				if approvalOutput, breakLoop := s.handleApprovalWait(ctx, resultStr, agentName, iterCount); breakLoop {
+					if sseHub := findSSEHub(s.app); sseHub != nil {
+						eventData, _ := json.Marshal(map[string]any{
+							"task_id":  taskID,
+							"agent_id": agentID,
+							"status":   "approval_timeout",
+						})
+						sseHub.BroadcastEvent("task_completed", string(eventData))
+					}
 					output := map[string]any{
 						"result":     approvalOutput,
 						"status":     "approval_timeout",
@@ -373,6 +389,14 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 			// Handle human request blocking: if the tool was request_human with blocking=true, pause and wait.
 			if tc.Name == "request_human" && !isError {
 				if blockingOutput, breakLoop := s.handleHumanRequestWait(ctx, resultStr, agentName, iterCount); breakLoop {
+					if sseHub := findSSEHub(s.app); sseHub != nil {
+						eventData, _ := json.Marshal(map[string]any{
+							"task_id":  taskID,
+							"agent_id": agentID,
+							"status":   "request_expired",
+						})
+						sseHub.BroadcastEvent("task_completed", string(eventData))
+					}
 					output := map[string]any{
 						"result":     blockingOutput,
 						"status":     "request_expired",
@@ -450,6 +474,14 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 						Content:   "[SYSTEM] " + breakMsg,
 					})
 				}
+				if sseHub := findSSEHub(s.app); sseHub != nil {
+					eventData, _ := json.Marshal(map[string]any{
+						"task_id":  taskID,
+						"agent_id": agentID,
+						"status":   "loop_detected",
+					})
+					sseHub.BroadcastEvent("task_completed", string(eventData))
+				}
 				output := map[string]any{
 					"result":     breakMsg,
 					"status":     "loop_detected",
@@ -500,6 +532,16 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 		}
 	}
 
+	// Broadcast task completion via SSE
+	if sseHub := findSSEHub(s.app); sseHub != nil {
+		eventData, _ := json.Marshal(map[string]any{
+			"task_id":  taskID,
+			"agent_id": agentID,
+			"status":   "completed",
+		})
+		sseHub.BroadcastEvent("task_completed", string(eventData))
+	}
+
 	output := map[string]any{
 		"result":     finalContent,
 		"status":     "completed",
@@ -507,6 +549,16 @@ func (s *AgentExecuteStep) Execute(ctx context.Context, pc *module.PipelineConte
 	}
 
 	return &module.StepResult{Output: output}, nil
+}
+
+// findSSEHub searches the service registry for an SSEHub instance.
+func findSSEHub(app modular.Application) *SSEHub {
+	for _, svc := range app.SvcRegistry() {
+		if hub, ok := svc.(*SSEHub); ok {
+			return hub
+		}
+	}
+	return nil
 }
 
 // handleApprovalWait parses the request_approval tool result, finds the ApprovalManager,

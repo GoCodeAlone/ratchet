@@ -6,7 +6,7 @@ package plugin
 import (
 	"context"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 )
 
 // Tool extends Ratchet agents with additional capabilities.

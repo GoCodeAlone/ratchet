@@ -9,9 +9,10 @@ import (
 	"strings"
 
 	"github.com/CrisisTextLine/modular"
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"
+	"github.com/GoCodeAlone/workflow-plugin-authz/authz"
 	"github.com/GoCodeAlone/workflow/capability"
 	"github.com/GoCodeAlone/workflow/config"
 	"github.com/GoCodeAlone/workflow/module"
@@ -39,8 +40,8 @@ func New() *RatchetPlugin {
 				Version:     "1.0.0",
 				Author:      "GoCodeAlone",
 				Description: "Ratchet autonomous agent orchestration plugin",
-				ModuleTypes: []string{"agent.provider", "ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server"},
-				StepTypes:   []string{"step.agent_execute", "step.provider_test", "step.provider_models", "step.workspace_init", "step.container_control", "step.secret_manage", "step.vault_config", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact", "step.human_request_resolve"},
+				ModuleTypes: []string{"agent.provider", "ratchet.sse_hub", "ratchet.scheduler", "ratchet.mcp_client", "ratchet.mcp_server", "authz.casbin"},
+				StepTypes:   []string{"step.agent_execute", "step.provider_test", "step.provider_models", "step.workspace_init", "step.container_control", "step.secret_manage", "step.vault_config", "step.mcp_reload", "step.oauth_exchange", "step.approval_resolve", "step.webhook_process", "step.security_audit", "step.test_interact", "step.human_request_resolve", "step.memory_extract", "step.bcrypt_check", "step.bcrypt_hash", "step.jwt_generate", "step.jwt_decode"},
 				WiringHooks: []string{"agent.provider_registry", "ratchet.sse_route_registration", "ratchet.mcp_server_route_registration", "ratchet.db_init", "ratchet.auth_token", "ratchet.secrets_guard", "ratchet.provider_registry", "ratchet.tool_policy_engine", "ratchet.sub_agent_manager", "ratchet.tool_registry", "ratchet.container_manager", "ratchet.transcript_recorder", "ratchet.skill_manager", "ratchet.approval_manager", "ratchet.human_request_manager", "ratchet.webhook_manager", "ratchet.security_auditor", "ratchet.browser_manager", "ratchet.test_interaction"},
 			},
 		},
@@ -64,6 +65,7 @@ func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 		"ratchet.mcp_client":         newMCPClientFactory(),
 		"ratchet.mcp_server":         newMCPServerFactory(),
 		"ratchet.tool_policy_engine": newToolPolicyModuleFactory(),
+		"authz.casbin":               authz.NewCasbinModuleFactory(),
 	}
 }
 
@@ -73,7 +75,7 @@ func (p *RatchetPlugin) ModuleFactories() map[string]plugin.ModuleFactory {
 // delegated to the agent plugin's factories since ratchetplugin absorbs the
 // agent plugin to avoid duplicate step registration.
 func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
-	return map[string]plugin.StepFactory{
+	factories := map[string]plugin.StepFactory{
 		"step.agent_execute":         newAgentExecuteStepFactory(),
 		"step.provider_test":         agentplugin.NewProviderTestFactory(),
 		"step.provider_models":       agentplugin.NewProviderModelsFactory(),
@@ -88,7 +90,19 @@ func (p *RatchetPlugin) StepFactories() map[string]plugin.StepFactory {
 		"step.security_audit":        newSecurityAuditFactory(),
 		"step.test_interact":         newTestInteractFactory(),
 		"step.human_request_resolve": newHumanRequestResolveFactory(),
+		"step.memory_extract":        newMemoryExtractFactory(),
+		"step.bcrypt_check":          newBcryptCheckFactory(),
+		"step.bcrypt_hash":           newBcryptHashFactory(),
+		"step.jwt_generate":          newJWTGenerateFactory(),
+		"step.jwt_decode":            newJWTDecodeFactory(),
 	}
+
+	// Merge in authz step factories (step.authz_check_casbin, step.authz_add_policy, etc.)
+	for k, v := range authz.StepFactories() {
+		factories[k] = v
+	}
+
+	return factories
 }
 
 // WiringHooks returns the post-init wiring hooks for this plugin.
@@ -326,6 +340,7 @@ func toolRegistryHook() plugin.WiringHook {
 			registry.Register(&tools.GitCommitTool{})
 			registry.Register(&tools.GitPushTool{})
 			registry.Register(&tools.GitDiffTool{})
+			registry.Register(&tools.GitPRCreateTool{})
 
 			if db != nil {
 				registry.Register(&tools.TaskCreateTool{DB: db})
@@ -385,6 +400,7 @@ func toolRegistryHook() plugin.WiringHook {
 
 			// Security tools
 			registry.Register(&tools.VulnCheckTool{})
+			registry.Register(&tools.SecurityScanURLTool{})
 			if db != nil {
 				runAudit := func(ctx context.Context) (map[string]any, error) {
 					auditor := NewSecurityAuditor(db, app)
@@ -421,6 +437,7 @@ func toolRegistryHook() plugin.WiringHook {
 			}
 
 			// Data tools
+			registry.Register(&tools.DBQueryExternalTool{})
 			if db != nil {
 				registry.Register(&tools.DBAnalyzeTool{DB: db})
 				registry.Register(&tools.DBHealthCheckTool{DB: db})
@@ -636,7 +653,7 @@ func testInteractionHook() plugin.WiringHook {
 					if !ok {
 						continue
 					}
-					testProvider := agentProviderToRatchet(agentMod)
+					testProvider := agentMod.Provider()
 					if testProvider == nil {
 						continue
 					}

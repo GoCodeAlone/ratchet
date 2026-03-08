@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/GoCodeAlone/ratchet/provider"
+	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/google/uuid"
 )
 
@@ -141,6 +141,11 @@ func (tp *TestProvider) Stream(ctx context.Context, messages []provider.Message,
 	ch <- provider.StreamEvent{Type: "done", Usage: &resp.Usage}
 	close(ch)
 	return ch, nil
+}
+
+// AuthModeInfo implements provider.Provider.
+func (tp *TestProvider) AuthModeInfo() provider.AuthModeInfo {
+	return provider.AuthModeInfo{Mode: "none", DisplayName: "Test provider"}
 }
 
 // InteractionCount returns how many interactions have been processed.
