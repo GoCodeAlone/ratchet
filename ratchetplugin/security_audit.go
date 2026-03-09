@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CrisisTextLine/modular"
+	"github.com/GoCodeAlone/modular"
 )
 
 // AuditSeverity represents the severity of an audit finding.
