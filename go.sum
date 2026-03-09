@@ -48,10 +48,8 @@ github.com/DataDog/datadog-go/v5 v5.4.0 h1:Ea3eXUVwrVV28F/fo3Dr3aa+TL/Z7Xi6SUPKW
 github.com/DataDog/datadog-go/v5 v5.4.0/go.mod h1:K9kcYBlxkcPP8tvvjZZKs/m1edNAUFzBbdpTUKfCsuw=
 github.com/GoCodeAlone/go-plugin v0.0.0-20260220090904-b4c35f0e4271 h1:/oxxpYJ41BuK+/5Gp9c+0PHybyNFWeBHyCzkSVLCoMk=
 github.com/GoCodeAlone/go-plugin v0.0.0-20260220090904-b4c35f0e4271/go.mod h1:HbGQRZUIa+jbDfjsaZIMJYvrz+LnxL0mJpggfynSTMk=
-github.com/GoCodeAlone/workflow v0.3.24 h1:wTM4mq1FpjuX4CYpOEw0Gxz2kQdSBIt80MyhKrPb+zw=
-github.com/GoCodeAlone/workflow v0.3.24/go.mod h1:v60REpp2GR3HsOcDk5QfRhCeQeMshpjpHb/ErW3/QBM=
-github.com/GoCodeAlone/workflow-plugin-agent v0.2.0 h1:20fbajdUw+ImIJsa+B96PvaVPBgNf2tltANrZ/CVNY8=
-github.com/GoCodeAlone/workflow-plugin-agent v0.2.0/go.mod h1:kn2KINaf7NJ3LhIHOtejvfszNau4UODA6TWD6pm0zTA=
+github.com/GoCodeAlone/workflow v0.3.28 h1:2cNsJnwaCYriiq0YreXa31qm8xy+NI9Pxfh/+Axohv8=
+github.com/GoCodeAlone/workflow v0.3.28/go.mod h1:v60REpp2GR3HsOcDk5QfRhCeQeMshpjpHb/ErW3/QBM=
 github.com/GoCodeAlone/workflow-plugin-agent v0.3.0 h1:Ez0EASrmtQUwEid9unx9N3A2bjCMEpWzn3ZsZcCrJ4s=
 github.com/GoCodeAlone/workflow-plugin-agent v0.3.0/go.mod h1:kn2KINaf7NJ3LhIHOtejvfszNau4UODA6TWD6pm0zTA=
 github.com/GoCodeAlone/workflow-plugin-authz v0.2.0 h1:zC56HuMP8heRxFgTb8uIYwubGFv8BwASbtT3nMwBOj4=

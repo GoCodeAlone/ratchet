@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/CrisisTextLine/modular v1.11.11
-	github.com/GoCodeAlone/workflow v0.3.24
+	github.com/GoCodeAlone/workflow v0.3.28
 	github.com/GoCodeAlone/workflow-plugin-agent v0.3.0
 	github.com/GoCodeAlone/workflow-plugin-authz v0.2.0
 	github.com/docker/docker v28.5.2+incompatible
