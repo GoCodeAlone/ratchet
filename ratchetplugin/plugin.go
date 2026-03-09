@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/CrisisTextLine/modular"
+	"github.com/GoCodeAlone/modular"
 	"github.com/GoCodeAlone/workflow-plugin-agent/provider"
 	"github.com/GoCodeAlone/ratchet/ratchetplugin/tools"
 	agentplugin "github.com/GoCodeAlone/workflow-plugin-agent"

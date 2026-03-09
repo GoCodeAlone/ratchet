@@ -20,7 +20,7 @@ import (
 	"github.com/GoCodeAlone/workflow/module"
 	"github.com/GoCodeAlone/workflow/secrets"
 
-	"github.com/CrisisTextLine/modular"
+	"github.com/GoCodeAlone/modular"
 	_ "modernc.org/sqlite"
 )
 

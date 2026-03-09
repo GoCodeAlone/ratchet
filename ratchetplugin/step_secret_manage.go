@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/CrisisTextLine/modular"
+	"github.com/GoCodeAlone/modular"
 	"github.com/GoCodeAlone/workflow/module"
 	"github.com/GoCodeAlone/workflow/plugin"
 	"github.com/GoCodeAlone/workflow/secrets"
