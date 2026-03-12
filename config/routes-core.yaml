@@ -70,33 +70,43 @@ workflows:
         middlewares: *auth_mw
         pipeline:
           steps:
-            - name: get-started-at
-              type: step.db_query
+            - name: fetch-info
+              type: step.parallel
               config:
-                database: ratchet-db
-                query: "SELECT value FROM server_info WHERE key = 'started_at'"
-                mode: single
-            - name: count-agents
-              type: step.db_query
-              config:
-                database: ratchet-db
-                query: "SELECT COUNT(*) as count FROM agents"
-                mode: single
-            - name: count-teams
-              type: step.db_query
-              config:
-                database: ratchet-db
-                query: "SELECT COUNT(DISTINCT team_id) as count FROM agents WHERE team_id != ''"
-                mode: single
+                branches:
+                  get-started-at:
+                    steps:
+                      - name: get-started-at
+                        type: step.db_query
+                        config:
+                          database: ratchet-db
+                          query: "SELECT value FROM server_info WHERE key = 'started_at'"
+                          mode: single
+                  count-agents:
+                    steps:
+                      - name: count-agents
+                        type: step.db_query
+                        config:
+                          database: ratchet-db
+                          query: "SELECT COUNT(*) as count FROM agents"
+                          mode: single
+                  count-teams:
+                    steps:
+                      - name: count-teams
+                        type: step.db_query
+                        config:
+                          database: ratchet-db
+                          query: "SELECT COUNT(DISTINCT team_id) as count FROM agents WHERE team_id != ''"
+                          mode: single
             - name: respond
               type: step.json_response
               config:
                 status: 200
                 body:
                   version: "1.0.0"
-                  started_at: "{{ step \"get-started-at\" \"row\" \"value\" }}"
-                  agent_count: "{{ step \"count-agents\" \"row\" \"count\" }}"
-                  team_count: "{{ step \"count-teams\" \"row\" \"count\" }}"
+                  started_at: '{{ index .steps "fetch-info" "results" "get-started-at" "row" "value" }}'
+                  agent_count: '{{ index .steps "fetch-info" "results" "count-agents" "row" "count" }}'
+                  team_count: '{{ index .steps "fetch-info" "results" "count-teams" "row" "count" }}'
                   plugins:
                     - "ratchet.ai_provider"
                     - "ratchet.sse_hub"
