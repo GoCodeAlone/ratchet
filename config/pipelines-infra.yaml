@@ -3,126 +3,108 @@
 # Triggered by config/triggers.yaml on a 5-minute cron schedule.
 
 pipelines:
-  infra-monitor:
-    description: "Periodic infrastructure health check with autonomous remediation"
-    steps:
-      # Find the infrastructure agent (role = 'infrastructure') — skip if none configured
-      - name: find-infra-agent
-        type: step.db_query
-        config:
-          database: ratchet-db
-          query: >
-            SELECT id, name, system_prompt, provider FROM agents
-            WHERE role = 'infrastructure' AND status != 'stopped'
-            ORDER BY created_at ASC LIMIT 1
-          mode: single
+    infra-monitor:
+        description: "Periodic infrastructure health check with autonomous remediation"
+        steps:
+            # Find the infrastructure agent (role = 'infrastructure') — skip if none configured
+            - name: find_infra_agent
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: >
+                    SELECT id, name, system_prompt, provider FROM agents WHERE role = 'infrastructure' AND status != 'stopped' ORDER BY created_at ASC LIMIT 1
 
-      # Skip the full pipeline if no infrastructure agent is configured
-      - name: check-agent-exists
-        type: step.conditional
-        config:
-          field: "steps.find-infra-agent.found"
-          routes:
-            "false": no-infra-agent
-          default: check-active-agent
+                mode: single
+            # Skip the full pipeline if no infrastructure agent is configured
+            - name: check_agent_exists
+              type: step.conditional
+              config:
+                field: "steps.find_infra_agent.found"
+                routes:
+                    "false": no_infra_agent
+                default: check_active_agent
+            # Also skip if the agent is already busy (status = active means actively executing)
+            - name: check_active_agent
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: >
+                    SELECT COUNT(*) as busy FROM tasks WHERE assigned_to = ? AND status = 'in_progress'
 
-      # Also skip if the agent is already busy (status = active means actively executing)
-      - name: check-active-agent
-        type: step.db_query
-        config:
-          database: ratchet-db
-          query: >
-            SELECT COUNT(*) as busy FROM tasks
-            WHERE assigned_to = ?
-            AND status = 'in_progress'
-          params:
-            - '{{ step "find-infra-agent" "row" "id" }}'
-          mode: single
+                params:
+                    - '{{ step "find-infra-agent" "row" "id" }}'
+                mode: single
+            - name: check_not_busy
+              type: step.conditional
+              config:
+                field: "steps.check_active_agent.row.busy"
+                routes:
+                    "0": create_health_check_task
+                default: agent_busy
+            # Create a health check task for the infrastructure agent
+            - name: create_health_check_task
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: >
+                    INSERT INTO tasks (id, title, description, status, priority, assigned_to, created_at, updated_at) VALUES (
 
-      - name: check-not-busy
-        type: step.conditional
-        config:
-          field: "steps.check-active-agent.row.busy"
-          routes:
-            "0": create-health-check-task
-          default: agent-busy
+                      lower(hex(randomblob(16))),
+                      'Infrastructure Health Check',
+                      'Run a complete infrastructure health check. Observe all pod statuses, detect anomalies, and remediate any issues found. Record findings in memory. Report a structured summary at the end.',
+                      'pending',
+                      5,
+                      ?,
+                      datetime('now'),
+                      datetime('now')
+                    )
 
-      # Create a health check task for the infrastructure agent
-      - name: create-health-check-task
-        type: step.db_exec
-        config:
-          database: ratchet-db
-          query: >
-            INSERT INTO tasks (id, title, description, status, priority, assigned_to, created_at, updated_at)
-            VALUES (
-              lower(hex(randomblob(16))),
-              'Infrastructure Health Check',
-              'Run a complete infrastructure health check. Observe all pod statuses, detect anomalies, and remediate any issues found. Record findings in memory. Report a structured summary at the end.',
-              'pending',
-              5,
-              ?,
-              datetime('now'),
-              datetime('now')
-            )
-          params:
-            - '{{ step "find-infra-agent" "row" "id" }}'
+                params:
+                    - '{{ step "find-infra-agent" "row" "id" }}'
+            # Populate Current with agent data for step.agent_execute
+            # (intermediate steps overwrite the "row" key, so we restore it here)
+            - name: prepare_agent_context
+              type: step.set
+              config:
+                values:
+                    agent_id: '{{ step "find-infra-agent" "row" "id" }}'
+                    agent_name: '{{ step "find-infra-agent" "row" "name" }}'
+                    system_prompt: '{{ step "find-infra-agent" "row" "system_prompt" }}'
+                    task: >
+                        Run a complete infrastructure health check using the self-healing-infrastructure skill. Observe all pod statuses across all namespaces, detect anomalies, and remediate any issues found using the approved remediation playbooks. Record all findings and actions in memory. End with a structured health report.
 
-      # Populate Current with agent data for step.agent_execute
-      # (intermediate steps overwrite the "row" key, so we restore it here)
-      - name: prepare-agent-context
-        type: step.set
-        config:
-          values:
-            agent_id: '{{ step "find-infra-agent" "row" "id" }}'
-            agent_name: '{{ step "find-infra-agent" "row" "name" }}'
-            system_prompt: '{{ step "find-infra-agent" "row" "system_prompt" }}'
-            task: >
-              Run a complete infrastructure health check using the self-healing-infrastructure skill.
-              Observe all pod statuses across all namespaces, detect anomalies, and remediate any
-              issues found using the approved remediation playbooks. Record all findings and actions
-              in memory. End with a structured health report.
+            - name: execute_infra_agent
+              type: step.agent_execute
+              config:
+                max_iterations: 15
+                provider_service: ratchet-ai
+                approval_timeout: "10m"
+                loop_detection:
+                    max_consecutive: 3
+                    max_errors: 2
+            - name: mark_task_done
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: >
+                    UPDATE tasks SET status = 'completed', result = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE assigned_to = ? AND title = 'Infrastructure Health Check' AND status = 'pending'
 
-      - name: execute-infra-agent
-        type: step.agent_execute
-        config:
-          max_iterations: 15
-          provider_service: ratchet-ai
-          approval_timeout: "10m"
-          loop_detection:
-            max_consecutive: 3
-            max_errors: 2
-
-      - name: mark-task-done
-        type: step.db_exec
-        config:
-          database: ratchet-db
-          query: >
-            UPDATE tasks SET status = 'completed',
-            result = ?,
-            completed_at = datetime('now'),
-            updated_at = datetime('now')
-            WHERE assigned_to = ?
-            AND title = 'Infrastructure Health Check'
-            AND status = 'pending'
-          params:
-            - '{{ step "execute-infra-agent" "result" | default "completed" }}'
-            - '{{ step "find-infra-agent" "row" "id" }}'
-
-      - name: log-infra-result
-        type: step.log
-        config:
-          message: "Infrastructure health check complete for agent {{ step \"find-infra-agent\" \"row\" \"id\" }}"
-          level: info
-
-      # Terminal steps (skipped execution paths)
-      - name: no-infra-agent
-        type: step.log
-        config:
-          message: "infra-monitor: no infrastructure agent configured — skipping health check"
-          level: debug
-
-      - name: agent-busy
-        type: step.log
-        config:
-          message: "infra-monitor: infrastructure agent is busy — skipping this check cycle"
-          level: debug
+                params:
+                    - '{{ step "execute-infra-agent" "result" | default "completed" }}'
+                    - '{{ step "find-infra-agent" "row" "id" }}'
+            - name: log_infra_result
+              type: step.log
+              config:
+                message: "Infrastructure health check complete for agent {{ step \"find-infra-agent\" \"row\" \"id\" }}"
+                level: info
+            # Terminal steps (skipped execution paths)
+            - name: no_infra_agent
+              type: step.log
+              config:
+                message: "infra-monitor: no infrastructure agent configured — skipping health check"
+                level: debug
+            - name: agent_busy
+              type: step.log
+              config:
+                message: "infra-monitor: infrastructure agent is busy — skipping this check cycle"
+                level: debug

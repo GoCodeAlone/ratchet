@@ -3,111 +3,97 @@
 # Triggered by config/triggers.yaml on a 15-minute cron schedule.
 
 pipelines:
-  data-monitor:
-    description: "Periodic database health and query optimization analysis"
-    steps:
-      # Find the data agent (role = 'data') — skip if none configured
-      - name: find-data-agent
-        type: step.db_query
-        config:
-          database: ratchet-db
-          query: >
-            SELECT id, name, system_prompt, provider FROM agents
-            WHERE role = 'data' AND status != 'stopped'
-            ORDER BY created_at ASC LIMIT 1
-          mode: single
+    data-monitor:
+        description: "Periodic database health and query optimization analysis"
+        steps:
+            # Find the data agent (role = 'data') — skip if none configured
+            - name: find_data_agent
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: >
+                    SELECT id, name, system_prompt, provider FROM agents WHERE role = 'data' AND status != 'stopped' ORDER BY created_at ASC LIMIT 1
 
-      # Skip the full pipeline if no data agent is configured
-      - name: check-agent-exists
-        type: step.conditional
-        config:
-          field: "steps.find-data-agent.found"
-          routes:
-            "false": no-data-agent
-          default: check-busy
+                mode: single
+            # Skip the full pipeline if no data agent is configured
+            - name: check_agent_exists
+              type: step.conditional
+              config:
+                field: "steps.find_data_agent.found"
+                routes:
+                    "false": no_data_agent
+                default: check_busy
+            # Also skip if the agent is already busy
+            - name: check_busy
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: >
+                    SELECT COUNT(*) as busy FROM tasks WHERE assigned_to = ? AND status = 'in_progress'
 
-      # Also skip if the agent is already busy
-      - name: check-busy
-        type: step.db_query
-        config:
-          database: ratchet-db
-          query: >
-            SELECT COUNT(*) as busy FROM tasks
-            WHERE assigned_to = ? AND status = 'in_progress'
-          params:
-            - '{{ step "find-data-agent" "row" "id" }}'
-          mode: single
+                params:
+                    - '{{ step "find-data-agent" "row" "id" }}'
+                mode: single
+            - name: check_not_busy
+              type: step.conditional
+              config:
+                field: "steps.check_busy.row.busy"
+                routes:
+                    "0": create_analysis_task
+                default: agent_busy
+            # Create a database health check task for the data agent
+            - name: create_analysis_task
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: >
+                    INSERT INTO tasks (id, title, description, status, priority, assigned_to, created_at, updated_at) VALUES (lower(hex(randomblob(16))), 'Database Health Check', 'Run database health analysis. Check integrity, analyze query plans, identify optimization opportunities. Check memory for past recommendations.', 'pending', 2, ?, datetime('now'), datetime('now'))
 
-      - name: check-not-busy
-        type: step.conditional
-        config:
-          field: "steps.check-busy.row.busy"
-          routes:
-            "0": create-analysis-task
-          default: agent-busy
+                params:
+                    - '{{ step "find-data-agent" "row" "id" }}'
+            # Populate Current with agent data for step.agent_execute
+            - name: prepare_agent_context
+              type: step.set
+              config:
+                values:
+                    agent_id: '{{ step "find-data-agent" "row" "id" }}'
+                    agent_name: '{{ step "find-data-agent" "row" "name" }}'
+                    system_prompt: '{{ step "find-data-agent" "row" "system_prompt" }}'
+                    task: >
+                        Run a database health analysis. Use db_health_check to assess overall database health. Use db_analyze on important queries to find optimization opportunities. Check memory_search for past recommendations. Save new findings and optimization recommendations with memory_save. Report a structured summary with health metrics and recommendations.
 
-      # Create a database health check task for the data agent
-      - name: create-analysis-task
-        type: step.db_exec
-        config:
-          database: ratchet-db
-          query: >
-            INSERT INTO tasks (id, title, description, status, priority, assigned_to, created_at, updated_at)
-            VALUES (lower(hex(randomblob(16))), 'Database Health Check', 'Run database health analysis. Check integrity, analyze query plans, identify optimization opportunities. Check memory for past recommendations.', 'pending', 2, ?, datetime('now'), datetime('now'))
-          params:
-            - '{{ step "find-data-agent" "row" "id" }}'
+            - name: execute_data_agent
+              type: step.agent_execute
+              config:
+                max_iterations: 10
+                provider_service: ratchet-ai
+                approval_timeout: "10m"
+                loop_detection:
+                    max_consecutive: 3
+                    max_errors: 2
+            - name: mark_task_done
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: >
+                    UPDATE tasks SET status = 'completed', result = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE assigned_to = ? AND title = 'Database Health Check' AND status = 'pending'
 
-      # Populate Current with agent data for step.agent_execute
-      - name: prepare-agent-context
-        type: step.set
-        config:
-          values:
-            agent_id: '{{ step "find-data-agent" "row" "id" }}'
-            agent_name: '{{ step "find-data-agent" "row" "name" }}'
-            system_prompt: '{{ step "find-data-agent" "row" "system_prompt" }}'
-            task: >
-              Run a database health analysis. Use db_health_check to assess overall database health.
-              Use db_analyze on important queries to find optimization opportunities. Check memory_search
-              for past recommendations. Save new findings and optimization recommendations with memory_save.
-              Report a structured summary with health metrics and recommendations.
-
-      - name: execute-data-agent
-        type: step.agent_execute
-        config:
-          max_iterations: 10
-          provider_service: ratchet-ai
-          approval_timeout: "10m"
-          loop_detection:
-            max_consecutive: 3
-            max_errors: 2
-
-      - name: mark-task-done
-        type: step.db_exec
-        config:
-          database: ratchet-db
-          query: >
-            UPDATE tasks SET status = 'completed',
-            result = ?, completed_at = datetime('now'), updated_at = datetime('now')
-            WHERE assigned_to = ? AND title = 'Database Health Check' AND status = 'pending'
-          params:
-            - '{{ step "execute-data-agent" "result" | default "completed" }}'
-            - '{{ step "find-data-agent" "row" "id" }}'
-
-      - name: log-result
-        type: step.log
-        config:
-          message: "Database health check complete for agent {{ step \"find-data-agent\" \"row\" \"id\" }}"
-          level: info
-
-      # Terminal steps (skipped execution paths)
-      - name: no-data-agent
-        type: step.log
-        config:
-          message: "data-monitor: no data agent configured — skipping"
-          level: debug
-
-      - name: agent-busy
-        type: step.log
-        config:
-          message: "data-monitor: data agent is busy — skipping this cycle"
-          level: debug
+                params:
+                    - '{{ step "execute-data-agent" "result" | default "completed" }}'
+                    - '{{ step "find-data-agent" "row" "id" }}'
+            - name: log_result
+              type: step.log
+              config:
+                message: "Database health check complete for agent {{ step \"find-data-agent\" \"row\" \"id\" }}"
+                level: info
+            # Terminal steps (skipped execution paths)
+            - name: no_data_agent
+              type: step.log
+              config:
+                message: "data-monitor: no data agent configured — skipping"
+                level: debug
+            - name: agent_busy
+              type: step.log
+              config:
+                message: "data-monitor: data agent is busy — skipping this cycle"
+                level: debug

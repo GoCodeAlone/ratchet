@@ -3,111 +3,97 @@
 # Triggered by config/triggers.yaml on a 30-minute cron schedule.
 
 pipelines:
-  security-monitor:
-    description: "Periodic security audit and vulnerability scanning"
-    steps:
-      # Find the security agent (role = 'security') — skip if none configured
-      - name: find-security-agent
-        type: step.db_query
-        config:
-          database: ratchet-db
-          query: >
-            SELECT id, name, system_prompt, provider FROM agents
-            WHERE role = 'security' AND status != 'stopped'
-            ORDER BY created_at ASC LIMIT 1
-          mode: single
+    security-monitor:
+        description: "Periodic security audit and vulnerability scanning"
+        steps:
+            # Find the security agent (role = 'security') — skip if none configured
+            - name: find_security_agent
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: >
+                    SELECT id, name, system_prompt, provider FROM agents WHERE role = 'security' AND status != 'stopped' ORDER BY created_at ASC LIMIT 1
 
-      # Skip the full pipeline if no security agent is configured
-      - name: check-agent-exists
-        type: step.conditional
-        config:
-          field: "steps.find-security-agent.found"
-          routes:
-            "false": no-security-agent
-          default: check-busy
+                mode: single
+            # Skip the full pipeline if no security agent is configured
+            - name: check_agent_exists
+              type: step.conditional
+              config:
+                field: "steps.find_security_agent.found"
+                routes:
+                    "false": no_security_agent
+                default: check_busy
+            # Also skip if the agent is already busy
+            - name: check_busy
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: >
+                    SELECT COUNT(*) as busy FROM tasks WHERE assigned_to = ? AND status = 'in_progress'
 
-      # Also skip if the agent is already busy
-      - name: check-busy
-        type: step.db_query
-        config:
-          database: ratchet-db
-          query: >
-            SELECT COUNT(*) as busy FROM tasks
-            WHERE assigned_to = ? AND status = 'in_progress'
-          params:
-            - '{{ step "find-security-agent" "row" "id" }}'
-          mode: single
+                params:
+                    - '{{ step "find-security-agent" "row" "id" }}'
+                mode: single
+            - name: check_not_busy
+              type: step.conditional
+              config:
+                field: "steps.check_busy.row.busy"
+                routes:
+                    "0": create_scan_task
+                default: agent_busy
+            # Create a security scan task for the security agent
+            - name: create_scan_task
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: >
+                    INSERT INTO tasks (id, title, description, status, priority, assigned_to, created_at, updated_at) VALUES (lower(hex(randomblob(16))), 'Security Scan', 'Run a comprehensive security audit and vulnerability scan. Check memory for previously found vulnerabilities and track remediation status.', 'pending', 4, ?, datetime('now'), datetime('now'))
 
-      - name: check-not-busy
-        type: step.conditional
-        config:
-          field: "steps.check-busy.row.busy"
-          routes:
-            "0": create-scan-task
-          default: agent-busy
+                params:
+                    - '{{ step "find-security-agent" "row" "id" }}'
+            # Populate Current with agent data for step.agent_execute
+            - name: prepare_agent_context
+              type: step.set
+              config:
+                values:
+                    agent_id: '{{ step "find-security-agent" "row" "id" }}'
+                    agent_name: '{{ step "find-security-agent" "row" "name" }}'
+                    system_prompt: '{{ step "find-security-agent" "row" "system_prompt" }}'
+                    task: >
+                        Run a comprehensive security assessment. Use security_scan to run the platform audit, vuln_check to scan for dependency vulnerabilities. Check memory_search for previously found vulnerabilities. Save new findings and status updates with memory_save. Report a structured summary with new, recurring, and resolved findings.
 
-      # Create a security scan task for the security agent
-      - name: create-scan-task
-        type: step.db_exec
-        config:
-          database: ratchet-db
-          query: >
-            INSERT INTO tasks (id, title, description, status, priority, assigned_to, created_at, updated_at)
-            VALUES (lower(hex(randomblob(16))), 'Security Scan', 'Run a comprehensive security audit and vulnerability scan. Check memory for previously found vulnerabilities and track remediation status.', 'pending', 4, ?, datetime('now'), datetime('now'))
-          params:
-            - '{{ step "find-security-agent" "row" "id" }}'
+            - name: execute_security_agent
+              type: step.agent_execute
+              config:
+                max_iterations: 10
+                provider_service: ratchet-ai
+                approval_timeout: "10m"
+                loop_detection:
+                    max_consecutive: 3
+                    max_errors: 2
+            - name: mark_task_done
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: >
+                    UPDATE tasks SET status = 'completed', result = ?, completed_at = datetime('now'), updated_at = datetime('now') WHERE assigned_to = ? AND title = 'Security Scan' AND status = 'pending'
 
-      # Populate Current with agent data for step.agent_execute
-      - name: prepare-agent-context
-        type: step.set
-        config:
-          values:
-            agent_id: '{{ step "find-security-agent" "row" "id" }}'
-            agent_name: '{{ step "find-security-agent" "row" "name" }}'
-            system_prompt: '{{ step "find-security-agent" "row" "system_prompt" }}'
-            task: >
-              Run a comprehensive security assessment. Use security_scan to run the platform audit,
-              vuln_check to scan for dependency vulnerabilities. Check memory_search for previously
-              found vulnerabilities. Save new findings and status updates with memory_save. Report
-              a structured summary with new, recurring, and resolved findings.
-
-      - name: execute-security-agent
-        type: step.agent_execute
-        config:
-          max_iterations: 10
-          provider_service: ratchet-ai
-          approval_timeout: "10m"
-          loop_detection:
-            max_consecutive: 3
-            max_errors: 2
-
-      - name: mark-task-done
-        type: step.db_exec
-        config:
-          database: ratchet-db
-          query: >
-            UPDATE tasks SET status = 'completed',
-            result = ?, completed_at = datetime('now'), updated_at = datetime('now')
-            WHERE assigned_to = ? AND title = 'Security Scan' AND status = 'pending'
-          params:
-            - '{{ step "execute-security-agent" "result" | default "completed" }}'
-            - '{{ step "find-security-agent" "row" "id" }}'
-
-      - name: log-result
-        type: step.log
-        config:
-          message: "Security scan complete for agent {{ step \"find-security-agent\" \"row\" \"id\" }}"
-          level: info
-
-      # Terminal steps (skipped execution paths)
-      - name: no-security-agent
-        type: step.log
-        config:
-          message: "security-monitor: no security agent configured — skipping"
-          level: debug
-
-      - name: agent-busy
-        type: step.log
-        config:
-          message: "security-monitor: security agent is busy — skipping this cycle"
-          level: debug
+                params:
+                    - '{{ step "execute-security-agent" "result" | default "completed" }}'
+                    - '{{ step "find-security-agent" "row" "id" }}'
+            - name: log_result
+              type: step.log
+              config:
+                message: "Security scan complete for agent {{ step \"find-security-agent\" \"row\" \"id\" }}"
+                level: info
+            # Terminal steps (skipped execution paths)
+            - name: no_security_agent
+              type: step.log
+              config:
+                message: "security-monitor: no security agent configured — skipping"
+                level: debug
+            - name: agent_busy
+              type: step.log
+              config:
+                message: "security-monitor: security agent is busy — skipping this cycle"
+                level: debug
