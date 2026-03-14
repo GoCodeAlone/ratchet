@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/GoCodeAlone/modular v1.12.3
 	github.com/GoCodeAlone/workflow v0.3.32
-	github.com/GoCodeAlone/workflow-plugin-agent v0.4.0
+	github.com/GoCodeAlone/workflow-plugin-agent v0.4.1
 	github.com/GoCodeAlone/workflow-plugin-authz v0.2.2
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/go-rod/rod v0.116.2
