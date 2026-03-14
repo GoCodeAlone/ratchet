@@ -67,6 +67,7 @@ func NewProviderRegistry(db *sql.DB, secretsProvider secrets.Provider) *Provider
 	r.factories["anthropic_foundry"] = anthropicFoundryProviderFactory
 	r.factories["anthropic_vertex"] = anthropicVertexProviderFactory
 	r.factories["anthropic_bedrock"] = anthropicBedrockProviderFactory
+	r.factories["gemini"] = geminiProviderFactory
 
 	return r
 }
@@ -328,6 +329,14 @@ func anthropicVertexProviderFactory(apiKey string, cfg LLMProviderConfig) (provi
 		Model:           cfg.Model,
 		MaxTokens:       cfg.MaxTokens,
 		CredentialsJSON: credJSON,
+	})
+}
+
+func geminiProviderFactory(apiKey string, cfg LLMProviderConfig) (provider.Provider, error) {
+	return provider.NewGeminiProvider(provider.GeminiConfig{
+		APIKey:    apiKey,
+		Model:     cfg.Model,
+		MaxTokens: cfg.MaxTokens,
 	})
 }
 
