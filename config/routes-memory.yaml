@@ -1,0 +1,54 @@
+# Memory Browser Routes
+# API endpoints for viewing and managing agent memory entries
+
+_anchors:
+  auth_mw: &auth_mw [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+
+workflows:
+  http-ratchet-memory:
+    router: ratchet-router
+    server: ratchet-server
+    routes:
+      # List memory entries
+      - method: GET
+        path: "/api/memory"
+        handler: ratchet-queries
+        middlewares: *auth_mw
+        pipeline:
+          steps:
+            - name: list-memories
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, agent_id, content, category, created_at FROM memory_entries ORDER BY created_at DESC LIMIT 100"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-memories.rows"
+
+      # Delete a memory entry
+      - method: DELETE
+        path: "/api/memory/{id}"
+        handler: ratchet-commands
+        middlewares: *auth_mw
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+            - name: delete-memory
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM memory_entries WHERE id = ?"
+                params:
+                  - '{{ step "parse-request" "id" }}'
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  deleted: true

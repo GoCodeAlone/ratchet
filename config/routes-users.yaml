@@ -1,0 +1,135 @@
+# User Management Routes
+# Admin-only endpoints for managing platform users
+
+_anchors:
+  auth_mw: &auth_mw [ratchet-cors, ratchet-ratelimit, ratchet-auth-middleware]
+
+workflows:
+  http-ratchet-users:
+    router: ratchet-router
+    server: ratchet-server
+    routes:
+      # List all users (admin only, excludes password_hash)
+      - method: GET
+        path: "/api/users"
+        handler: ratchet-queries
+        middlewares: *auth_mw
+        pipeline:
+          steps:
+            - name: list-users
+              type: step.db_query
+              config:
+                database: ratchet-db
+                query: "SELECT id, username, email, role, created_at, updated_at FROM users ORDER BY created_at DESC"
+                mode: list
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body_from: "steps.list-users.rows"
+
+      # Create user (admin only)
+      - method: POST
+        path: "/api/users"
+        handler: ratchet-commands
+        middlewares: *auth_mw
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                parse_body: true
+
+            - name: prepare-hash
+              type: step.set
+              config:
+                values:
+                  password: '{{ step "parse-request" "body" "password" }}'
+
+            - name: hash-password
+              type: step.bcrypt_hash
+
+            - name: generate-id
+              type: step.set
+              config:
+                values:
+                  user_id: '{{ uuidv4 }}'
+
+            - name: insert-user
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "INSERT INTO users (id, username, password_hash, email, role) VALUES (?, ?, ?, ?, ?)"
+                params:
+                  - '{{ step "generate-id" "user_id" }}'
+                  - '{{ step "parse-request" "body" "username" }}'
+                  - '{{ step "hash-password" "hash" }}'
+                  - '{{ default "" (step "parse-request" "body" "email") }}'
+                  - '{{ default "viewer" (step "parse-request" "body" "role") }}'
+
+            - name: respond
+              type: step.json_response
+              config:
+                status: 201
+                body:
+                  id: '{{ step "generate-id" "user_id" }}'
+                  username: '{{ step "parse-request" "body" "username" }}'
+                  email: '{{ default "" (step "parse-request" "body" "email") }}'
+                  role: '{{ default "viewer" (step "parse-request" "body" "role") }}'
+
+      # Update user role/email (admin only)
+      - method: PATCH
+        path: "/api/users/{id}"
+        handler: ratchet-commands
+        middlewares: *auth_mw
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+                parse_body: true
+
+            - name: update-user
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "UPDATE users SET email = COALESCE(NULLIF(?, ''), email), role = COALESCE(NULLIF(?, ''), role), updated_at = datetime('now') WHERE id = ?"
+                params:
+                  - '{{ default "" (step "parse-request" "body" "email") }}'
+                  - '{{ default "" (step "parse-request" "body" "role") }}'
+                  - '{{ step "parse-request" "id" }}'
+
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  updated: true
+
+      # Delete user (admin only)
+      - method: DELETE
+        path: "/api/users/{id}"
+        handler: ratchet-commands
+        middlewares: *auth_mw
+        pipeline:
+          steps:
+            - name: parse-request
+              type: step.request_parse
+              config:
+                path_params: [id]
+
+            - name: delete-user
+              type: step.db_exec
+              config:
+                database: ratchet-db
+                query: "DELETE FROM users WHERE id = ? AND id != 'admin'"
+                params:
+                  - '{{ step "parse-request" "id" }}'
+
+            - name: respond
+              type: step.json_response
+              config:
+                status: 200
+                body:
+                  deleted: true
