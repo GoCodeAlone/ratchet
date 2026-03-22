@@ -29,7 +29,7 @@ func TestDBQueryExternalTool_SQLiteFileBased(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	db.Close()
+	_ = db.Close()
 
 	result, err := tool.Execute(ctx, map[string]any{
 		"connection_string": dbPath,
@@ -140,7 +140,7 @@ func TestDBQueryExternalTool_EmptyResult(t *testing.T) {
 	}
 	db.SetMaxOpenConns(1)
 	_, _ = db.Exec("CREATE TABLE empty_table (id INTEGER PRIMARY KEY)")
-	db.Close()
+	_ = db.Close()
 
 	result, err := tool.Execute(ctx, map[string]any{
 		"connection_string": dbPath,

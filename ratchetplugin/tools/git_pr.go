@@ -89,7 +89,7 @@ func (t *GitPRCreateTool) Execute(ctx context.Context, params map[string]any) (a
 	if err != nil {
 		return nil, fmt.Errorf("github api: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, _ := io.ReadAll(resp.Body)
 

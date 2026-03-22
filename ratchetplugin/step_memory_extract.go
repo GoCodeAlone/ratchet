@@ -76,7 +76,7 @@ func (s *MemoryExtractStep) Execute(ctx context.Context, pc *module.PipelineCont
 	if err != nil {
 		return &module.StepResult{Output: map[string]any{"extracted": false, "reason": fmt.Sprintf("query error: %v", err)}}, nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var sb strings.Builder
 	for rows.Next() {

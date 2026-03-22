@@ -146,7 +146,7 @@ func checkURLTLS(targetURL string) urlSecurityFinding {
 			Remediation: "Install a valid TLS certificate",
 		}
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	certs := conn.ConnectionState().PeerCertificates
 	if len(certs) == 0 {
