@@ -14,7 +14,7 @@ import (
 	"syscall"
 
 	"github.com/GoCodeAlone/ratchet/internal/version"
-	"github.com/GoCodeAlone/ratchet/ratchetplugin"
+	ratchetplugin "github.com/GoCodeAlone/workflow-plugin-agent/orchestrator"
 	"github.com/GoCodeAlone/workflow"
 	"github.com/GoCodeAlone/workflow/config"
 	"github.com/GoCodeAlone/workflow/plugins/all"
