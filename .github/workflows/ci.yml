@@ -7,6 +7,24 @@ on:
     branches: [main]
 
 jobs:
+  wfctl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Install wfctl
+        run: go install github.com/GoCodeAlone/workflow/cmd/wfctl@v0.20.1
+
+      - name: Validate workflow config
+        run: wfctl validate --skip-unknown-types ratchet.yaml
+
+      - name: Contract snapshot
+        run: wfctl contract test ratchet.yaml
+
   test:
     runs-on: ubuntu-latest
     steps:

@@ -1,11 +1,6 @@
 # Core Modules
 # Infrastructure modules for the Ratchet server
 
-requires:
-  plugins:
-    - name: ratchet
-      version: ">=1.0.0"
-
 modules:
   # --- Config provider (injects env-based config into pipeline templates) ---
   - name: config-provider
