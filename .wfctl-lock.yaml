@@ -1,6 +1,6 @@
 version: 1
-generated_at: 2026-05-01T12:02:52Z
+generated_at: 2026-05-06T05:38:42Z
 plugins:
     ratchet:
-        version: '>=1.0.0'
-        source:
+        version: v0.9.1
+        source: github.com/GoCodeAlone/workflow-plugin-agent

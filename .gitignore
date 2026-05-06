@@ -2,7 +2,11 @@ bin/
 ratchetd
 ratchetd-linux
 dist/
-data/
+data/*.db
+data/*.db-shm
+data/*.db-wal
+# Ignore runtime data but track plugin manifests
+data/workflow.db
 *.db
 *.db-shm
 *.db-wal

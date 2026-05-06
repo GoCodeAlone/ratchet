@@ -1,0 +1,31 @@
+{
+  "name": "ratchet",
+  "version": "v0.9.1",
+  "source": "github.com/GoCodeAlone/workflow-plugin-agent",
+  "description": "Ratchet autonomous agent plugin — provides agent execution, MCP integration, and orchestration types",
+  "moduleTypes": [
+    "agent.provider",
+    "ratchet.mcp_client",
+    "ratchet.mcp_server",
+    "ratchet.scheduler",
+    "ratchet.sse_hub",
+    "ratchet.tool_policy_engine"
+  ],
+  "stepTypes": [
+    "step.agent_execute",
+    "step.approval_resolve",
+    "step.bcrypt_hash",
+    "step.container_control",
+    "step.human_request_resolve",
+    "step.mcp_reload",
+    "step.oauth_exchange",
+    "step.provider_models",
+    "step.provider_test",
+    "step.secret_manage",
+    "step.security_audit",
+    "step.test_interact",
+    "step.vault_config",
+    "step.webhook_process",
+    "step.workspace_init"
+  ]
+}

@@ -22,7 +22,7 @@ jobs:
         run: go install github.com/GoCodeAlone/workflow/cmd/wfctl@v0.20.1
 
       - name: Validate workflow config
-        run: wfctl validate --skip-unknown-types ratchet.yaml
+        run: wfctl validate -plugin-dir data/plugins ratchet.yaml
 
       - name: Contract snapshot
         run: wfctl contract test ratchet.yaml
