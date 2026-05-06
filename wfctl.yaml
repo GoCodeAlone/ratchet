@@ -1,0 +1,5 @@
+version: 1
+plugins:
+    - name: ratchet
+      version: v0.9.1
+      source: github.com/GoCodeAlone/workflow-plugin-agent
