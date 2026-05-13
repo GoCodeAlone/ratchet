@@ -58,8 +58,8 @@ github.com/GoCodeAlone/modular/modules/jsonschema v1.15.0 h1:xb1mI4NZkzvNKQ2F6nk
 github.com/GoCodeAlone/modular/modules/jsonschema v1.15.0/go.mod h1:hhGouwAVsonmJ4Lain4jINZ9nZCoc9l9eF3BHbmR8eE=
 github.com/GoCodeAlone/modular/modules/reverseproxy/v2 v2.8.0 h1:cvdLHbM/vzvygQTcAWSJsy+dAPzzwWyjzKMmTBFcFIo=
 github.com/GoCodeAlone/modular/modules/reverseproxy/v2 v2.8.0/go.mod h1:/9ipMG4qM2CHQ14BfXKdVlYRJelef6M8MFI5TbZv67M=
-github.com/GoCodeAlone/workflow v0.50.0 h1:ai+3P1mWWNf0Q9KjB9tHtpn0uBuISCv0PdOpQSK0HVE=
-github.com/GoCodeAlone/workflow v0.50.0/go.mod h1:8825xDA4dAxlKN0OObT9dbwLvhxMkk5obB2+1dZo+jo=
+github.com/GoCodeAlone/workflow v0.51.6 h1:jN/cAsCoIcwvHdMAbdhNfTIDiYtN1W+sd87aWS4DP0I=
+github.com/GoCodeAlone/workflow v0.51.6/go.mod h1:5dh9esKq48kH4zKWjccXmyOirWL+T+YzfLclzhdRIV4=
 github.com/GoCodeAlone/workflow-plugin-agent v0.9.1 h1:S0YDZKEm+2AvLJyvbNltH692+D5k9l74KN+O/ockvL8=
 github.com/GoCodeAlone/workflow-plugin-agent v0.9.1/go.mod h1:1l6Y73/FG+IdyB8ckY3yHaUsv7BLEa2duwUdgQAxi1g=
 github.com/GoCodeAlone/workflow-plugin-authz v0.5.3 h1:nKDeWtW64nkX1JanbMQmPojOVHi87VbG+CueobxGhjI=
@@ -223,8 +223,6 @@ github.com/deckarep/golang-set/v2 v2.9.0 h1:prva4eP9UysWagLyKrtn074ughi0NnkIf0A4
 github.com/deckarep/golang-set/v2 v2.9.0/go.mod h1:EWknQXbs0mcFpat2QOoXV0Ee57cD+w6ZEN76BR2JVrM=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
 github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
-github.com/digitalocean/godo v1.178.0 h1:+B4xGOaoFwwwpM7TKhoyGHdmFg5eF9zDB1YfOLvNJ2E=
-github.com/digitalocean/godo v1.178.0/go.mod h1:xQsWpVCCbkDrWisHA72hPzPlnC+4W5w/McZY5ij9uvU=
 github.com/distribution/reference v0.6.0 h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5QvfrDyIgxBk=
 github.com/distribution/reference v0.6.0/go.mod h1:BbU0aIcezP1/5jX/8MP0YiH4SdvB5Y4f/wlDRiLyi3E=
 github.com/dlclark/regexp2 v1.11.4 h1:rPYF9/LECdNymJufQKmri9gV604RvvABwgOA8un7yAo=
@@ -380,11 +378,8 @@ github.com/google/go-cmp v0.3.1/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMyw
 github.com/google/go-cmp v0.4.0/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
 github.com/google/go-cmp v0.5.4/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
 github.com/google/go-cmp v0.5.5/go.mod h1:v8dTdLbMG2kIc/vJvl+f65V22dbkXbowE6jgT/gNBxE=
-github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
-github.com/google/go-querystring v1.2.0 h1:yhqkPbu2/OH+V9BfpCVPZkNmUXhb2gBxJArfhIxNtP0=
-github.com/google/go-querystring v1.2.0/go.mod h1:8IFJqpSRITyJ8QhQ13bmbeMBDfmeEJZD5A0egEOmkqU=
 github.com/google/go-tpm v0.9.8 h1:slArAR9Ft+1ybZu0lBwpSmpwhRXaa85hWtMinMyRAWo=
 github.com/google/go-tpm v0.9.8/go.mod h1:h9jEsEECg7gtLis0upRBQU+GhYVH6jMjrFxI8u6bVUY=
 github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
