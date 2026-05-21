@@ -96,12 +96,16 @@ jobs:
     permissions:
       contents: read
     needs: release
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: >-
+      !github.event.deleted
+      && !contains(github.ref_name, '-')
+      && github.repository == 'GoCodeAlone/ratchet'
     steps:
       - name: Trigger registry manifest sync
-        uses: peter-evans/repository-dispatch@v4
+        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697  # v4
         with:
           token: ${{ secrets.repo_dispatch_token }}
           repository: GoCodeAlone/workflow-registry
           event-type: plugin-release
-          client-payload: '{"plugin": "ratchet"}'
+          client-payload: |-
+            {"plugin": "ratchet", "tag": "${{ github.ref_name }}"}
