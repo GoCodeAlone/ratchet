@@ -15,6 +15,8 @@ import (
 
 	"github.com/GoCodeAlone/ratchet/internal/version"
 	ratchetplugin "github.com/GoCodeAlone/workflow-plugin-agent/orchestrator"
+	workflowpluginauth "github.com/GoCodeAlone/workflow-plugin-auth"
+	workflowplugininfra "github.com/GoCodeAlone/workflow-plugin-infra"
 	"github.com/GoCodeAlone/workflow"
 	"github.com/GoCodeAlone/workflow/config"
 	"github.com/GoCodeAlone/workflow/plugins/all"
@@ -41,11 +43,19 @@ func main() {
 		log.Fatalf("Failed to load config %s: %v", *configPath, err)
 	}
 
+	// ratchet is a thin in-process composer (ADR 0056 dual-shape). The
+	// orchestrator (workflow-plugin-agent) no longer carries auth/secret
+	// steps (v0.11.0); ratchet sources them from auth + infra as in-process
+	// EnginePlugin consumers, and declares a secrets.vault module that the
+	// orchestrator's SecretGuard lazy-resolves on first redaction + the
+	// secret-admin steps read/write through.
 	engine, err := workflow.NewEngineBuilder().
 		WithAllDefaults().
 		WithLogger(logger).
 		WithPlugins(all.DefaultPlugins()...).
 		WithPlugin(ratchetplugin.New()).
+		WithPlugin(workflowpluginauth.NewAuthEnginePlugin()).
+		WithPlugin(workflowplugininfra.NewInfraEnginePlugin()).
 		BuildFromConfig(cfg)
 	if err != nil {
 		log.Fatalf("Failed to build engine: %v", err)

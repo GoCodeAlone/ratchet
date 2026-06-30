@@ -47,6 +47,17 @@ modules:
           required: false
           default: "false"
           desc: "Enable OpenTelemetry tracing"
+        vault_address:
+          env: RATCHET_VAULT_ADDRESS
+          required: false
+          default: "http://127.0.0.1:8200"
+          desc: "HashiCorp Vault address (the secrets.vault backend)"
+        vault_token:
+          env: RATCHET_VAULT_TOKEN
+          required: false
+          default: "ratchet-dev-root-token"
+          sensitive: true
+          desc: "Vault root token (dev only; production uses a scoped token)"
 
   # --- HTTP server ---
   - name: ratchet-server
@@ -96,6 +107,20 @@ modules:
     type: storage.sqlite
     config:
       dbPath: '{{config "db_path"}}'
+
+  # --- Secrets vault (the SecretGuard lazy-resolve target + secret-admin backend) ---
+  # The orchestrator's secretsGuardHook stores app+moduleKey on registration and
+  # lazy-resolves the SecretProvider on first redaction. The infra secret-admin
+  # steps (step.secret_list/secret_delete/secret_vault_status/secret_vault_test)
+  # and the engine builtin step.secret_set read/write through this module.
+  # Dev defaults point at a local Vault dev server; production overrides via
+  # RATCHET_VAULT_ADDRESS / RATCHET_VAULT_TOKEN.
+  - name: ratchet-vault
+    type: secrets.vault
+    config:
+      address: '{{config "vault_address"}}'
+      token: '{{config "vault_token"}}'
+      mountPath: secret
 
   # --- Messaging broker (in-memory, for future inter-agent messaging) ---
   - name: ratchet-broker

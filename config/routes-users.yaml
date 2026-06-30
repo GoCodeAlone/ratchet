@@ -47,7 +47,7 @@ workflows:
                   password: '{{ step "parse-request" "body" "password" }}'
 
             - name: hash-password
-              type: step.bcrypt_hash
+              type: step.auth_password_hash
 
             - name: generate-id
               type: step.set

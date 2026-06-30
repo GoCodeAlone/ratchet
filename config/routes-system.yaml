@@ -18,9 +18,9 @@ workflows:
         pipeline:
           steps:
             - name: list-secrets
-              type: step.secret_manage
+              type: step.secret_list
               config:
-                action: list
+                module: ratchet-vault
             - name: respond
               type: step.json_response
               config:
@@ -40,11 +40,11 @@ workflows:
                 path_params: [key]
                 parse_body: true
             - name: set-secret
-              type: step.secret_manage
+              type: step.secret_set
               config:
-                action: set
-                key: "{{ step \"parse-request\" \"path_params\" \"key\" }}"
-                value: "{{ step \"parse-request\" \"body\" \"value\" }}"
+                module: ratchet-vault
+                secrets:
+                  "{{ step \"parse-request\" \"path_params\" \"key\" }}": "{{ step \"parse-request\" \"body\" \"value\" }}"
             - name: respond
               type: step.json_response
               config:
@@ -63,9 +63,9 @@ workflows:
               config:
                 path_params: [key]
             - name: delete-secret
-              type: step.secret_manage
+              type: step.secret_delete
               config:
-                action: delete
+                module: ratchet-vault
                 key: "{{ step \"parse-request\" \"path_params\" \"key\" }}"
             - name: respond
               type: step.json_response
@@ -81,9 +81,9 @@ workflows:
         pipeline:
           steps:
             - name: get-status
-              type: step.vault_config
+              type: step.secret_vault_status
               config:
-                action: get_status
+                module: ratchet-vault
             - name: respond
               type: step.json_response
               config:
@@ -102,71 +102,24 @@ workflows:
               config:
                 parse_body: true
             - name: test-vault
-              type: step.vault_config
+              type: step.secret_vault_test
               config:
-                action: test
+                module: ratchet-vault
             - name: respond
               type: step.json_response
               config:
                 status: 200
                 body_from: "steps.test-vault"
 
-      # Configure remote vault backend
-      - method: POST
-        path: "/api/vault/configure"
-        handler: ratchet-commands
-        middlewares: *auth_mw
-        pipeline:
-          steps:
-            - name: parse-request
-              type: step.request_parse
-              config:
-                parse_body: true
-            - name: configure-vault
-              type: step.vault_config
-              config:
-                action: configure
-            - name: respond
-              type: step.json_response
-              config:
-                status: 200
-                body_from: "steps.configure-vault"
+      # NOTE: /api/vault/configure, /api/vault/migrate, /api/vault/reset
+      # removed (Phase 3 D14): engine module-lifecycle ops for secrets.vault
+      # are not yet exposed as steps. Re-add when step.secret_vault_configure /
+      # _migrate / _reset ship.
 
-      # Migrate secrets between backends
-      - method: POST
-        path: "/api/vault/migrate"
-        handler: ratchet-commands
-        middlewares: *auth_mw
-        pipeline:
-          steps:
-            - name: migrate-vault
-              type: step.vault_config
-              config:
-                action: migrate
-            - name: respond
-              type: step.json_response
-              config:
-                status: 200
-                body_from: "steps.migrate-vault"
-
-      # Reset vault to default (vault-dev)
-      - method: POST
-        path: "/api/vault/reset"
-        handler: ratchet-commands
-        middlewares: *auth_mw
-        pipeline:
-          steps:
-            - name: reset-vault
-              type: step.vault_config
-              config:
-                action: reset
-            - name: respond
-              type: step.json_response
-              config:
-                status: 200
-                body_from: "steps.reset-vault"
-
-      # OAuth code exchange (Anthropic backend proxy for CORS)
+      # OAuth code exchange (Anthropic backend proxy for CORS).
+      # step.auth_anthropic_exchange mints a long-lived Anthropic API key from
+      # an OAuth code, so it is opt-in (D17 confused-deputy gate):
+      # enable_anthropic_oauth MUST be true or the step refuses.
       - method: POST
         path: "/api/oauth/exchange"
         handler: ratchet-commands
@@ -178,7 +131,9 @@ workflows:
               config:
                 parse_body: true
             - name: exchange
-              type: step.oauth_exchange
+              type: step.auth_anthropic_exchange
+              config:
+                enable_anthropic_oauth: true
             - name: respond
               type: step.json_response
               config:
