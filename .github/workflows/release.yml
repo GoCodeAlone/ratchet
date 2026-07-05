@@ -26,6 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout workflow-ui
+        uses: actions/checkout@v4
+        with:
+          repository: GoCodeAlone/workflow-ui
+          path: workflow-ui-dep
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
@@ -34,6 +40,15 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
+
+      - name: Build workflow-ui
+        run: |
+          cd workflow-ui-dep
+          npm ci
+          npm run build
+
+      - name: Link workflow-ui
+        run: ln -s "$GITHUB_WORKSPACE/workflow-ui-dep" "$GITHUB_WORKSPACE/../workflow-ui"
 
       - name: Build UI
         run: cd ui && npm ci && npm run build
@@ -45,29 +60,31 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION="${GITHUB_REF#refs/tags/}"
           EXT=""
           if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
 
           go build -ldflags "-X github.com/GoCodeAlone/ratchet/internal/version.Version=${VERSION}" \
-            -o bin/ratchetd-${GOOS}-${GOARCH}${EXT} ./cmd/ratchetd
+            -o "bin/ratchetd-${GOOS}-${GOARCH}${EXT}" ./cmd/ratchetd
 
           go build -ldflags "-X github.com/GoCodeAlone/ratchet/internal/version.Version=${VERSION}" \
-            -o bin/ratchet-${GOOS}-${GOARCH}${EXT} ./cmd/ratchet
+            -o "bin/ratchet-${GOOS}-${GOARCH}${EXT}" ./cmd/ratchet
 
       - name: Package
         run: |
-          VERSION=${GITHUB_REF#refs/tags/}
-          GOOS=${{ matrix.goos }}
-          GOARCH=${{ matrix.goarch }}
-          ARCHIVE=ratchet-${VERSION}-${GOOS}-${GOARCH}
-          mkdir -p dist/${ARCHIVE}
-          cp bin/ratchetd-${GOOS}-${GOARCH}* dist/${ARCHIVE}/ratchetd$([ "$GOOS" = "windows" ] && echo ".exe" || echo "")
-          cp bin/ratchet-${GOOS}-${GOARCH}* dist/${ARCHIVE}/ratchet$([ "$GOOS" = "windows" ] && echo ".exe" || echo "")
-          cp -r ui/dist dist/${ARCHIVE}/ui-dist
-          cp ratchet.yaml dist/${ARCHIVE}/
-          cp README.md dist/${ARCHIVE}/
-          cd dist && tar czf ${ARCHIVE}.tar.gz ${ARCHIVE}
+          VERSION="${GITHUB_REF#refs/tags/}"
+          GOOS="${{ matrix.goos }}"
+          GOARCH="${{ matrix.goarch }}"
+          ARCHIVE="ratchet-${VERSION}-${GOOS}-${GOARCH}"
+          EXT=""
+          if [ "$GOOS" = "windows" ]; then EXT=".exe"; fi
+          mkdir -p "dist/${ARCHIVE}"
+          cp "bin/ratchetd-${GOOS}-${GOARCH}${EXT}" "dist/${ARCHIVE}/ratchetd${EXT}"
+          cp "bin/ratchet-${GOOS}-${GOARCH}${EXT}" "dist/${ARCHIVE}/ratchet${EXT}"
+          cp -r ui/dist "dist/${ARCHIVE}/ui-dist"
+          cp ratchet.yaml "dist/${ARCHIVE}/"
+          cp README.md "dist/${ARCHIVE}/"
+          cd dist && tar czf "${ARCHIVE}.tar.gz" "${ARCHIVE}"
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
@@ -78,10 +95,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout workflow-ui
+        uses: actions/checkout@v4
+        with:
+          repository: GoCodeAlone/workflow-ui
+          path: workflow-ui-dep
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://npm.pkg.github.com'
+      - name: Build workflow-ui
+        run: |
+          cd workflow-ui-dep
+          npm ci
+          npm run build
+      - name: Link workflow-ui
+        run: ln -s "$GITHUB_WORKSPACE/workflow-ui-dep" "$GITHUB_WORKSPACE/../workflow-ui"
       - run: cd ui && npm ci && npm run build
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
