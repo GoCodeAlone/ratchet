@@ -90,6 +90,7 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           files: dist/*.tar.gz
 
   ui-release:
@@ -119,14 +120,27 @@ jobs:
       - name: Upload UI dist
         uses: softprops/action-gh-release@v2
         with:
+          draft: true
           files: ui/dist/**
+
+  publish-release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs: [release, ui-release]
+    steps:
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
 
   notify-workflow-registry:
     name: Notify workflow-registry
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: release
+    needs: publish-release
     if: >-
       !github.event.deleted
       && !contains(github.ref_name, '-')
