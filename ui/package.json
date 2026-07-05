@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@gocodealone/workflow-ui": "^0.2.0",
+    "@xyflow/react": "^12.10.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
